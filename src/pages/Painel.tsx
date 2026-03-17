@@ -83,7 +83,6 @@ function AgCard({ ag, now }: { ag: Agendamento; now: Date }) {
       <div className="border-t border-white/10 pt-3 mt-auto">
         <p className={`text-sm font-semibold ${isHappening ? 'text-emerald-300' : 'text-slate-300'}`}>
           👤 {ag.nomeResponsavel}
-          {ag.telefoneResponsavel && <span className="text-white/50 font-normal"> • {ag.telefoneResponsavel}</span>}
         </p>
       </div>
     </div>
