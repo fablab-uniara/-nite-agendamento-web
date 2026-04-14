@@ -18,22 +18,25 @@ import { db } from './firebase';
 export interface Parametros {
   cursos: string[];
   tiposUso: string[];
-  finalidades: string[];
   espacos: string[];
+  conteudos?: Record<string, string[]>;
 }
 
 export interface Agendamento {
   id?: string;
   espaco: string;
   tipoUso: string;
-  data: string;        // YYYY-MM-DD (internal)
+  data: string;        // DD-MM-YYYY (internal)
   horaInicio: string;  // HH:MM
   horaFim: string;     // HH:MM
   curso: string;
-  finalidade: string;
+  disciplina: string;
+  conteudo?: string;
   quantidadePessoas: string;
   nomeResponsavel: string;
   telefoneResponsavel?: string;
+  emailResponsavel?: string;
+  observacoes?: string;
   criadoEm?: Timestamp;
 }
 
@@ -78,28 +81,22 @@ export const DEFAULT_PARAMETROS: Parametros = {
     'PPG em Direito e Gestão de Conflitos',
     'PPG em Engenharia de Produção',
     'PPG em Processos de Ensino, Gestão e Inovação',
+    'Mestrado em Direito',
+    'Biologia e Nutrição (Junção)',
     'Uso Interno',
   ],
-  tiposUso: ['Aula', 'Reunião', 'Palestra', 'Workshop', 'Manutenção', 'Simulação', 'Treinamento'],
-  finalidades: [
-    'Apresentação de TCC',
-    'Reunião de Grupo',
-    'Aula Prática',
-    'Gravação',
-    'Simulação Clínica',
-    'Treinamento de Habilidades',
-    'Evento Acadêmico',
-    'Uso Administrativo',
-  ],
+  tiposUso: ['Aula', 'Reunião', 'Palestra', 'Workshop', 'Manutenção', 'Simulação', 'Treinamento', 'Apresentação de TCC', 'Visita', 'Outros', 'Avaliação Prática'],
   espacos: [
     'Class Lab 1 (Cap. Máx. 114)',
     'Class Lab 2 (Cap. Máx. 50)',
     'Sala de Debriefing',
     'Sala UTI',
+    'Sala - Consultório',
     'Sala Semi-Intensiva',
     'Sala 1 - Procedimentos',
     'Sala 2 - Habilidades',
     'Fab Lab',
+    'NITE',
   ],
 };
 
@@ -148,13 +145,13 @@ export function applyPhoneMask(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
-// ─── Firestore operations ─────────────────────────────────────────────────────
-
 export async function buscarParametros(): Promise<Parametros> {
   try {
     const snap = await getDoc(doc(db, 'parametros', 'config'));
     if (snap.exists()) return snap.data() as Parametros;
-  } catch (_) { /* fallback */ }
+  } catch { 
+    /* Omitir o (_) remove a variável não utilizada */
+  }
   return DEFAULT_PARAMETROS;
 }
 
@@ -210,4 +207,36 @@ export async function verificarConflito(
     if (horaInicio < ag.horaFim && horaFim > ag.horaInicio) return { id: d.id, ...ag };
   }
   return null;
+}
+
+export interface SegurancaConfig {
+  pinMaster: string;
+  emailsPermitidos: Record<string, string>; // O Map que criámos no Firebase
+  admins?: string[];
+  adminsSaude?: string[];
+}
+
+// Função para buscar a configuração de segurança
+export async function buscarSeguranca(): Promise<SegurancaConfig | null> {
+  try {
+    const snap = await getDoc(doc(db, 'seguranca', 'acesso'));
+    if (snap.exists()) {
+      return snap.data() as SegurancaConfig;
+    }
+  } catch (error) {
+    console.error("Erro ao buscar segurança:", error);
+  }
+  return null;
+}
+
+// Função para buscar apenas os agendamentos de um usuário específico
+export async function buscarAgendamentosPorEmail(email: string): Promise<Agendamento[]> {
+  const q = query(
+    collection(db, 'agendamentos'), 
+    where('emailResponsavel', '==', email.toLowerCase())
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as Agendamento))
+    .sort((a, b) => b.data.localeCompare(a.data) || a.horaInicio.localeCompare(b.horaInicio));
 }

@@ -1,104 +1,114 @@
-import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import logo from '../assets/logo.png';
-
-function Clock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-  const date = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-  return (
-    <div className="text-center">
-      <div className="text-5xl font-black text-white tabular-nums tracking-tight">{time}</div>
-      <div className="text-white/60 text-sm mt-1 capitalize">{date}</div>
-    </div>
-  );
-}
-
-const CARDS = [
-  {
-    to: '/agendar',
-    title: 'Agendar Espaço',
-    description: 'Reserve salas, laboratórios e auditórios de forma rápida, com mínimo de digitação.',
-    cta: 'Fazer reserva →',
-    bg: 'bg-nite-blue',
-    ctaColor: 'text-blue-300',
-    icon: '📅',
-  },
-  {
-    to: '/painel',
-    title: 'Painel da Recepção',
-    description: 'Visualize todos os agendamentos do dia em tempo real. Otimizado para TV 1920×1080.',
-    cta: 'Abrir painel →',
-    bg: 'bg-emerald-700',
-    ctaColor: 'text-emerald-300',
-    icon: '📺',
-  },
-  {
-    to: '/gerenciador',
-    title: 'Painel Gerenciador',
-    description: 'Edite, copie, exclua agendamentos e crie recorrências. Acesso protegido por PIN.',
-    cta: 'Acessar →',
-    bg: 'bg-orange-700',
-    ctaColor: 'text-orange-300',
-    icon: '🛡️',
-  },
-];
+import * as P from '@phosphor-icons/react';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../lib/firebase';
+import { buscarSeguranca } from '../lib/firestore';
+import { useAuthState } from 'react-firebase-hooks/auth';
 
 export default function Home() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [user] = useAuthState(auth); // Verifica se já está logado
+
+  useEffect(() => {
+    document.title = "Início | NITE Uniara";
+  }, []);
+
+  const handleAgendarLogin = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const email = result.user.email?.toLowerCase() || '';
+      const config = await buscarSeguranca();
+
+      // Verificação robusta: ignora maiúsculas/minúsculas nas chaves do mapa
+      const listaEmails = config?.emailsPermitidos || {};
+      const isProfessor = Object.keys(listaEmails).some(key => key.toLowerCase() === email);
+      const isAdmin = config?.admins?.includes(email);
+      const isHealthAdmin = config?.adminsSaude?.includes(email);
+
+      if (isProfessor || isAdmin || isHealthAdmin) {
+        navigate('/meus-agendamentos'); 
+      } else {
+        alert('Acesso negado. A sua conta não tem privilégios de Administrador. Em caso de dúvidas, entre em contato com: niteprojetos@gmail.com');
+        await auth.signOut();
+      }
+    } catch (error) {
+      console.error("Erro no login:", error);
+      
+      // Converte o erro desconhecido para um formato que o TypeScript entenda
+      const err = error as { message?: string; code?: string };
+
+      // Tratamento de erro específico para navegadores Mobile (WhatsApp/Instagram)
+      if (err.message && err.message.includes('initial state')) {
+        alert("⚠️ O seu navegador bloqueou o login seguro. Se abriu este link pelo WhatsApp ou Instagram, toque nos três pontinhos no canto superior e escolha 'Abrir no Chrome' ou 'Abrir no Safari'.");
+      } else if (err.code === 'auth/popup-blocked') {
+        alert("⚠️ Pop-up bloqueado. Por favor, permita a abertura de janelas para fazer o login com o Google.");
+      } else {
+        alert("❌ Erro ao conectar com o Google. Tente abrir o sistema diretamente no navegador nativo do seu celular (Chrome/Safari).");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Hero */}
-      <div className="bg-nite-blue text-white py-16 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col lg:flex-row items-center gap-10">
-          <div className="flex flex-col items-center lg:items-start gap-4">
-            <img src={logo} alt="NITE" className="w-24 h-24 rounded-2xl shadow-xl" />
-            <div>
-              <h1 className="text-4xl lg:text-5xl font-black tracking-widest text-center lg:text-left">NITE</h1>
-              <p className="text-white/70 text-lg mt-1 text-center lg:text-left">Sistema de Agendamento de Espaços</p>
-            </div>
-          </div>
-          <div className="flex-1 flex justify-center lg:justify-end">
-            <div className="bg-white/10 rounded-2xl p-8 border border-white/20 backdrop-blur-sm">
-              <Clock />
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col items-center justify-center py-16 px-4">
+      <div className="text-center mb-12 max-w-2xl">
+        <h1 className="text-4xl sm:text-5xl font-black text-slate-800 tracking-tight mb-4">
+          Bem-vindo ao <span className="text-nite-blue">NITE</span>
+        </h1>
+        <p className="text-lg text-slate-600">
+          Núcleo de Inovação, Tecnologia e Empreendedorismo da Uniara.<br className="hidden sm:block" />
+          Acesse o sistema de gestão e agendamentos.
+        </p>
       </div>
 
-      {/* Cards */}
-      <div className="max-w-5xl mx-auto px-6 py-12">
-        <h2 className="text-2xl font-bold text-slate-800 mb-8 text-center">O que você deseja fazer?</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {CARDS.map((card) => (
-            <Link
-              key={card.to}
-              to={card.to}
-              className="group bg-white rounded-2xl border border-slate-200 p-8 shadow-sm hover:shadow-lg transition-all hover:-translate-y-1 flex flex-col"
-            >
-              <div className={`w-14 h-14 ${card.bg} rounded-xl flex items-center justify-center text-2xl mb-5 shadow-md`}>
-                {card.icon}
-              </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-3">{card.title}</h3>
-              <p className="text-slate-500 text-sm leading-relaxed flex-1">{card.description}</p>
-              <div className={`mt-6 font-semibold text-sm ${card.ctaColor} group-hover:underline`}>
-                {card.cta}
-              </div>
-            </Link>
-          ))}
+      <div className="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 w-full max-w-md text-center transform hover:-translate-y-1 transition-transform duration-300">
+        <div className="w-16 h-16 bg-nite-blue text-white rounded-xl flex items-center justify-center text-3xl mb-6 mx-auto shadow-md">
+          <P.CalendarDots size={32} weight="fill" />
         </div>
+        <h2 className="text-2xl font-bold text-slate-800 mb-3">Agendar Sala</h2>
+        <p className="text-slate-500 mb-8 text-sm">
+          Acesso exclusivo para professores e coordenadores cadastrados no sistema.
+        </p>
+        
+        {/* SE LOGADO, mostra botão direto. SE NÃO, pede login do Google */}
+        {user ? (
+          <button
+            onClick={() => navigate('/meus-agendamentos')}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-md transition-all flex justify-center items-center gap-2"
+          >
+            <P.BookmarkSimple size={24} weight="bold" />
+            Ir para Meus Agendamentos
+          </button>
+        ) : (
+          <button
+            onClick={handleAgendarLogin}
+            disabled={loading}
+            className="w-full bg-nite-blue hover:bg-blue-900 text-white font-bold py-4 rounded-xl shadow-md transition-all flex justify-center items-center gap-2 disabled:opacity-70"
+          >
+            {loading ? (
+              'Verificando permissão...'
+            ) : (
+              <>
+                <P.GoogleLogo size={24} weight="bold" />
+                Acessar com o Google
+              </>
+            )}
+          </button>
+        )}
 
-        {/* Info banner */}
-        <div className="mt-10 bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-start gap-3">
-          <span className="text-xl">🔥</span>
-          <p className="text-blue-700 text-sm leading-relaxed">
-            Agendamentos sincronizados em <strong>tempo real</strong> via Firebase Firestore.
-            Qualquer reserva feita aparece instantaneamente no Painel da Recepção.
-          </p>
-        </div>
+        <p className="text-sm text-slate-500 mt-4 font-medium text-center">
+          Utilize o seu e-mail institucional (@uniara.edu.br).
+        </p>
+
+        {/* LINKS DE TERMOS DA LGPD */}
+        <p className="text-xs text-slate-400 mt-6 text-center leading-relaxed border-t border-slate-100 pt-4">
+          Ao aceder ao sistema, declara estar de acordo com os nossos <br />
+          <Link to="/termos" className="text-nite-blue font-semibold hover:underline">Termos de Uso</Link> e a <Link to="/privacidade" className="text-nite-blue font-semibold hover:underline">Política de Privacidade</Link>.
+        </p>
       </div>
     </div>
   );
