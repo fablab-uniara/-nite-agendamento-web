@@ -40,7 +40,7 @@ export function Footer() {
             <P.FileText size={18} /> Termos de Uso
           </Link>
           <Link to="/privacidade" className="text-sm text-slate-600 hover:text-nite-blue font-semibold transition-colors flex items-center gap-2">
-            <P.ShieldCheck size={18} /> Política de Privacidade (LGPD)
+            <P.ShieldCheck size={18} /> Política de Privacidade
           </Link>
         </div>
       </div>
