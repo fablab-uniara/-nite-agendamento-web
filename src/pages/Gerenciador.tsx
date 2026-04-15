@@ -648,10 +648,15 @@ function GerenciarConteudosModal({ params, onClose, reload }: { params: Parametr
   );
 }
 
+// Fora do componente ou no topo
+  const CURSOS_SAUDE = ['Medicina', 'Farmácia', 'Enfermagem', 'Psicologia', 'Fisioterapia', 'Educação Física'];
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Gerenciador() {
   const [user] = useAuthState(auth);
+  
+  // Dentro do componente Gerenciador, junto com os outros states:
+  const [isAdminSaude, setIsAdminSaude] = useState(false);
 
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [params, setParams] = useState<Parametros>(DEFAULT_PARAMETROS);
@@ -662,7 +667,7 @@ export default function Gerenciador() {
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
-  const [adminRole, setAdminRole] = useState<'super' | 'saude'>('super');
+  const [adminRole, setAdminRole] = useState<'super' | 'saude' | 'comum'>('comum');
 
   const [editTarget, setEditTarget] = useState<Agendamento | null>(null);
   const [copyTarget, setCopyTarget] = useState<Agendamento | null>(null);
@@ -678,7 +683,11 @@ export default function Gerenciador() {
   useEffect(() => {
     if (user?.email) {
       buscarSeguranca().then(config => {
-        setIsSuperAdmin(config?.admins?.includes(user.email!.toLowerCase()) || false);
+        const email = user.email!.toLowerCase();
+        // Super Admin: está na lista 'admins'
+        setIsSuperAdmin(config?.admins?.includes(email) || false);
+        // Admin Saúde: está na lista 'adminsSaude' (certifique-se de ter esse campo no Firebase)
+        setIsAdminSaude(config?.adminsSaude?.includes(email) || false);
       });
     }
   }, [user]);
@@ -811,14 +820,24 @@ export default function Gerenciador() {
   }, [params, adminRole]);
 
   const filtered = useMemo(() => {
-  return agendamentos.filter((a) => {
-    if (adminRole === 'saude') {
-      // Admin Saúde gerencia TODOS os agendamentos marcados para os cursos da saúde
-      // (inclusive se eles reservarem uma sala Tech)
-      const cursosSaude = ['Medicina', 'Farmácia', 'Enfermagem', 'Psicologia', 'Fisioterapia', 'Educação Física'];
-      if (!cursosSaude.includes(a.curso)) return false;
-    }
-      
+    return agendamentos.filter((a) => {
+      // 1. Regra de Visualização Sênior (RBAC)
+      const emailLogado = user?.email?.toLowerCase();
+      const ehDono = a.emailResponsavel === emailLogado;
+      const ehCursoSaude = CURSOS_SAUDE.includes(a.curso);
+
+      // Bloqueios de visão baseados no cargo
+      if (!isSuperAdmin) {
+        if (isAdminSaude) {
+          // Admin Saúde vê os cursos dele OU os agendamentos que ele mesmo criou em outras áreas
+          if (!ehCursoSaude && !ehDono) return false;
+        } else {
+          // Segurança extra: Se um professor comum tentar aceder, vê só o dele
+          if (!ehDono) return false;
+        }
+      }
+
+      // 2. Filtros de Pesquisa (Data, Espaço, Busca)
       if (filterDate && a.data !== brToIso(filterDate)) return false;
       if (filterEspaco && a.espaco !== filterEspaco) return false;
       if (search) {
@@ -827,19 +846,23 @@ export default function Gerenciador() {
       }
       return true;
     });
-  }, [agendamentos, filterDate, filterEspaco, search, adminRole]);
+  }, [agendamentos, filterDate, filterEspaco, search, isSuperAdmin, isAdminSaude, user]);
 
   // Reload que faz a checagem de segurança primeiro
   const reload = async () => {
     setLoading(true);
     
-    // 1. CHECAGEM DE CARGO
+    // 1. CHECAGEM DE CARGO SÊNIOR
     if (user?.email) {
       const config = await buscarSeguranca();
-      if (config?.adminsSaude?.includes(user.email)) {
+      const email = user.email.toLowerCase();
+      
+      if (config?.admins?.includes(email)) {
+        setAdminRole('super');
+      } else if (config?.adminsSaude?.includes(email)) {
         setAdminRole('saude');
       } else {
-        setAdminRole('super');
+        setAdminRole('comum');
       }
     }
 
@@ -1073,15 +1096,25 @@ export default function Gerenciador() {
                             <button onClick={() => setObsTarget(ag)} title="Observações" className="bg-amber-100 text-amber-700 hover:bg-amber-200 text-xs font-bold px-2 py-1.5 rounded-lg transition-colors">
                               <span className="flex items-center gap-1"><P.ChatText size={16} /> OBS</span>
                             </button>
-                            <button onClick={() => setEditTarget(ag)} title="Editar" className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
-                              <P.PencilSimpleLine size={16} />
-                            </button>
+                            
+                            {/* BOTÃO EDITAR: Aparece apenas para o Super Admin */}
+                            {isSuperAdmin && (
+                              <button onClick={() => setEditTarget(ag)} title="Editar" className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
+                                <P.PencilSimpleLine size={16} />
+                              </button>
+                            )}
+
+                            {/* O Botão de Copiar fica liberado para todos (facilita o uso) */}
                             <button onClick={() => setCopyTarget(ag)} title="Copiar" className="bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
                               <P.Copy size={16} />
                             </button>
-                            <button onClick={() => setDeleteTarget(ag)} title="Excluir" className="bg-red-100 text-red-700 hover:bg-red-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
-                              <P.Trash size={16} />
-                            </button>
+
+                            {/* BOTÃO EXCLUIR: Aparece para Super Admin OU para quem for o Dono do Agendamento */}
+                            {(isSuperAdmin || ag.emailResponsavel === user?.email?.toLowerCase()) && (
+                              <button onClick={() => setDeleteTarget(ag)} title="Excluir" className="bg-red-100 text-red-700 hover:bg-red-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
+                                <P.Trash size={16} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
