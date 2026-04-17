@@ -99,7 +99,11 @@ interface AgForm {
   curso: string; disciplina: string; conteudo: string; quantidadePessoas: string; nomeResponsavel: string; telefoneResponsavel: string; observacoes: string;
 }
 
-function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, isSuperAdmin }: { initial: AgForm; params: Parametros; onSave: (f: AgForm) => Promise<void>; onClose: () => void; excludeId?: string; title: string; isSuperAdmin: boolean; }) {
+function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, isSuperAdmin, isAdminSaude }: { 
+  initial: AgForm; params: Parametros; onSave: (f: AgForm) => Promise<void>; 
+  onClose: () => void; excludeId?: string; title: string; 
+  isSuperAdmin: boolean; isAdminSaude: boolean; 
+}) {
   
   const [usoPuro, recursoExtra] = initial.tipoUso.split(' (Recurso: ');
   const recursoInit = recursoExtra ? recursoExtra.replace(')', '') : '';
@@ -125,7 +129,16 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
     if (form.horaFim <= form.horaInicio) { setError('Hora fim deve ser posterior à hora início.'); return; }
 
     const dataIso = brToIso(form.data);
-    if (!isSuperAdmin && dataIso > limiteIso) { setError('Você só pode agendar com no máximo 15 dias de antecedência.'); return; }
+    
+    // Lógica de Bypass: Admin da Saúde em salas e cursos da Saúde não têm trava
+    const ehCursoSaude = CURSOS_SAUDE.includes(form.curso);
+    const ehEspacoSaude = ESPACOS_SAUDE.includes(form.espaco);
+    const bypassAdminSaude = isAdminSaude && ehCursoSaude && ehEspacoSaude;
+
+    if (!isSuperAdmin && !bypassAdminSaude && dataIso > limiteIso) { 
+      setError('Você só pode agendar com no máximo 15 dias de antecedência.'); 
+      return; 
+    }
 
     const qtd = Number(form.quantidadePessoas);
     if (!form.quantidadePessoas || qtd < 1) { setError('A quantidade mínima é de 1 pessoa.'); return; }
@@ -293,7 +306,10 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
 
 // ─── Recorrente modal ─────────────────────────────────────────────────────────
 
-function RecorrenteModal({ params, onClose, isSuperAdmin }: { params: Parametros; onClose: () => void; isSuperAdmin: boolean }) {
+function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: { 
+  params: Parametros; onClose: () => void; 
+  isSuperAdmin: boolean; isAdminSaude: boolean; 
+}) {
   const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const [form, setForm] = useState({
     espaco: '', tipoUso: '', horaInicio: '', horaFim: '', curso: '', disciplina: '', conteudo: '',
@@ -319,7 +335,16 @@ function RecorrenteModal({ params, onClose, isSuperAdmin }: { params: Parametros
     if (form.diasSemana.length === 0) { setError('Selecione ao menos um dia da semana.'); return; }
 
     const endIso = brToIso(form.dataFim);
-    if (!isSuperAdmin && endIso > limiteIso) { setError('A Data Final ultrapassa o limite de 15 dias de antecedência.'); return; }
+    
+    // Lógica de Bypass
+    const ehCursoSaude = CURSOS_SAUDE.includes(form.curso);
+    const ehEspacoSaude = ESPACOS_SAUDE.includes(form.espaco);
+    const bypassAdminSaude = isAdminSaude && ehCursoSaude && ehEspacoSaude;
+
+    if (!isSuperAdmin && !bypassAdminSaude && endIso > limiteIso) { 
+      setError('A Data Final ultrapassa o limite de 15 dias de antecedência.'); 
+      return; 
+    }
 
     const qtd = Number(form.quantidadePessoas);
     if (!form.quantidadePessoas || qtd < 1) { setError('A quantidade mínima é de 1 pessoa.'); return; }
@@ -641,8 +666,8 @@ function GerenciarConteudosModal({ params, onClose, reload }: { params: Parametr
   );
 }
 
-// Fora do componente ou no topo
   const CURSOS_SAUDE = ['Medicina', 'Farmácia', 'Enfermagem', 'Psicologia', 'Fisioterapia', 'Educação Física'];
+  const ESPACOS_SAUDE = ["Sala de Debriefing", "Sala UTI", "Sala Semi-Intensiva", "Sala 1 - Procedimentos", "Sala 2 - Habilidades", "Sala - Consultório"];
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Gerenciador() {
@@ -818,18 +843,21 @@ export default function Gerenciador() {
       const emailLogado = user?.email?.toLowerCase();
       const ehDono = a.emailResponsavel === emailLogado;
       const ehCursoSaude = CURSOS_SAUDE.includes(a.curso);
+      
+      // Identifica se o agendamento veio da importação antiga
+      const ehImportado = a.observacoes === "Agendamento importado do sistema antigo";
 
       // Bloqueios de visão baseados no cargo
       if (!isSuperAdmin) {
         if (isAdminSaude) {
-          // Admin Saúde vê os cursos dele OU os agendamentos que ele mesmo criou em outras áreas
-          if (!ehCursoSaude && !ehDono) return false;
+          // Admin Saúde vê: cursos da saúde OU o que ele mesmo criou OU agendamentos importados
+          if (!ehCursoSaude && !ehDono && !ehImportado) return false;
         } else {
-          // Segurança extra: Se um professor comum tentar aceder, vê só o dele
-          if (!ehDono) return false;
+          // Segurança Máxima (Defesa em Profundidade): 
+          // Se um usuário comum chegar até aqui (burlar o pop-up), bloqueia TUDO. Ele não vê nenhuma linha.
+          return false;
         }
       }
-
       // 2. Filtros de Pesquisa (Data, Espaço, Busca)
       if (filterDate && a.data !== brToIso(filterDate)) return false;
       if (filterEspaco && a.espaco !== filterEspaco) return false;
@@ -1083,30 +1111,27 @@ export default function Gerenciador() {
                         {/* 9. Qtd */}
                         <td className="px-2 py-3 text-slate-600 text-center">{ag.quantidadePessoas === '0' ? 'N/A' : ag.quantidadePessoas}</td>
                         
-                        {/* 10. Ações (Compactadas apenas com Ícones para salvar muito espaço) */}
+                        {/* 10. Ações (Passo 2a: Refinado para Admin Saúde/Cursos Saúde) */}
                         <td className="px-2 py-3">
                           <div className="flex gap-1.5">
                             <button onClick={() => setObsTarget(ag)} title="Observações" className="bg-amber-100 text-amber-700 hover:bg-amber-200 text-xs font-bold px-2 py-1.5 rounded-lg transition-colors">
                               <span className="flex items-center gap-1"><P.ChatText size={16} /> OBS</span>
                             </button>
                             
-                            {/* BOTÃO EDITAR: Super Admin OU o dono do próprio agendamento */}
-                            {(isSuperAdmin || ag.emailResponsavel === user?.email?.toLowerCase()) && (
-                              <button onClick={() => setEditTarget(ag)} title="Editar" className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
-                                <P.PencilSimpleLine size={16} />
-                              </button>
-                            )}
+                            {/* AÇÕES: Super Admin, Dono OU (Admin Saúde EM importado DA SAÚDE) */}
+                            {(isSuperAdmin || ag.emailResponsavel === user?.email?.toLowerCase() || (isAdminSaude && ag.observacoes === "Agendamento importado do sistema antigo" && CURSOS_SAUDE.includes(ag.curso))) && (<>
+                                <button onClick={() => setEditTarget(ag)} title="Editar" className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
+                                  <P.PencilSimpleLine size={16} />
+                                </button>
 
-                            {/* O Botão de Copiar fica liberado para todos (facilita o uso) */}
-                            <button onClick={() => setCopyTarget(ag)} title="Copiar" className="bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
-                              <P.Copy size={16} />
-                            </button>
+                                <button onClick={() => setCopyTarget(ag)} title="Copiar" className="bg-amber-100 text-amber-700 hover:bg-amber-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
+                                  <P.Copy size={16} />
+                                </button>
 
-                            {/* BOTÃO EXCLUIR: Aparece para Super Admin OU para quem for o Dono do Agendamento */}
-                            {(isSuperAdmin || ag.emailResponsavel === user?.email?.toLowerCase()) && (
-                              <button onClick={() => setDeleteTarget(ag)} title="Excluir" className="bg-red-100 text-red-700 hover:bg-red-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
-                                <P.Trash size={16} />
-                              </button>
+                                <button onClick={() => setDeleteTarget(ag)} title="Excluir" className="bg-red-100 text-red-700 hover:bg-red-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
+                                  <P.Trash size={16} />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -1140,6 +1165,7 @@ export default function Gerenciador() {
         <AgendamentoForm
           title="Editar Agendamento"
           isSuperAdmin={isSuperAdmin}
+          isAdminSaude={isAdminSaude}
           initial={{
             espaco: editTarget.espaco, tipoUso: editTarget.tipoUso,
             data: isoToBr(editTarget.data), horaInicio: editTarget.horaInicio, horaFim: editTarget.horaFim,
@@ -1165,6 +1191,7 @@ export default function Gerenciador() {
         <AgendamentoForm
           title="Copiar Agendamento"
           isSuperAdmin={isSuperAdmin}
+          isAdminSaude={isAdminSaude}
           initial={{
             espaco: copyTarget.espaco, tipoUso: copyTarget.tipoUso,
             data: isoToBr(todayIso()), horaInicio: copyTarget.horaInicio, horaFim: copyTarget.horaFim,
@@ -1191,7 +1218,7 @@ export default function Gerenciador() {
       )}
 
       {/* Recorrente modal */}
-      {showRecorrente && ( <RecorrenteModal params={filteredParams} isSuperAdmin={isSuperAdmin} onClose={() => { setShowRecorrente(false); reload(); }}/>)}
+      {showRecorrente && ( <RecorrenteModal params={filteredParams} isSuperAdmin={isSuperAdmin} isAdminSaude={isAdminSaude} onClose={() => { setShowRecorrente(false); reload(); }}/>)}
 
       {/* Delete confirm */}
       {deleteTarget && (

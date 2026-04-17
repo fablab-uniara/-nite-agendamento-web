@@ -37,6 +37,9 @@ const EMPTY: FormData = {
   quantidadePessoas: '', nomeResponsavel: '', telefoneResponsavel: '', observacoes: '',
 };
 
+const CURSOS_SAUDE = ['Medicina', 'Farmácia', 'Enfermagem', 'Psicologia', 'Fisioterapia', 'Educação Física'];
+const ESPACOS_SAUDE = ["Sala de Debriefing", "Sala UTI", "Sala Semi-Intensiva", "Sala 1 - Procedimentos", "Sala 2 - Habilidades", "Sala - Consultório"];
+
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -73,6 +76,7 @@ export default function Agendar() {
   const [conflict, setConflict] = useState<Agendamento | null>(null);
   const [success, setSuccess] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isAdminSaude, setIsAdminSaude] = useState(false);
 
   const handleVoltar = async () => {
     if (!user?.email) {
@@ -112,6 +116,7 @@ export default function Agendar() {
       buscarSeguranca().then(config => {
         const email = user.email!.toLowerCase();
         setIsSuperAdmin(config?.admins?.includes(email) || false);
+        setIsAdminSaude(config?.adminsSaude?.includes(email) || false); // <-- ADICIONE ESTA LINHA
       });
     }
   }, [user]);
@@ -171,7 +176,12 @@ export default function Agendar() {
       if ((h * 60 + m) < currentMin) return 'O horário de início não pode estar no passado.';
     }
     
-    if (!isSuperAdmin && dataIso > limiteIso) {
+    // Lógica de Bypass para Admin da Saúde
+    const ehCursoSaude = CURSOS_SAUDE.includes(form.curso);
+    const ehEspacoSaude = ESPACOS_SAUDE.includes(form.espaco);
+    const bypassAdminSaude = isAdminSaude && ehCursoSaude && ehEspacoSaude;
+
+    if (!isSuperAdmin && !bypassAdminSaude && dataIso > limiteIso) {
       return 'Você só pode agendar horários com no máximo 15 dias de antecedência.';
     }
 

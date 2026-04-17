@@ -12,6 +12,7 @@ import {
   isoToBr,
   brToIso,
   applyDateMask,
+  buscarSeguranca,
 } from '../lib/firestore';
 
 export default function MeusAgendamentos() {
@@ -29,6 +30,19 @@ export default function MeusAgendamentos() {
   const [deleteTarget, setDeleteTarget] = useState<Agendamento | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [obsTarget, setObsTarget] = useState<Agendamento | null>(null);
+
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isAdminSaude, setIsAdminSaude] = useState(false);
+
+  useEffect(() => {
+    if (user?.email) {
+      buscarSeguranca().then(config => {
+        const email = user.email!.toLowerCase();
+        setIsSuperAdmin(config?.admins?.includes(email) || false);
+        setIsAdminSaude(config?.adminsSaude?.includes(email) || false);
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     // Se o usuário não tiver email, não busca nada.
@@ -112,6 +126,18 @@ export default function MeusAgendamentos() {
         </div>
       </div>
 
+      {(isSuperAdmin || isAdminSaude) && (
+        <div className="max-w-screen-xl mx-auto px-6 pt-6 pb-2">
+          <button
+            onClick={() => navigate('/gerenciador')}
+            className="flex items-center gap-2 text-slate-500 hover:text-nite-blue font-semibold transition-colors group"
+          >
+            <P.ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+            Voltar para o Gerenciador
+          </button>
+        </div>
+      )}
+      
       {/* Filters */}
       <div className="max-w-screen-xl mx-auto px-6 py-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row gap-3">
