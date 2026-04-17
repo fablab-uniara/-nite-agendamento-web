@@ -230,7 +230,7 @@ function AgendamentoForm({
                     <label key={cont} className="flex items-start gap-2 cursor-pointer group">
                       <input
                         type="checkbox"
-                        className="mt-1 w-4 h-4 text-nite-blue border-slate-300 rounded focus:ring-nite-blue cursor-pointer"
+                        className="mt-0.5 flex-shrink-0 w-4 h-4 accent-blue-600 cursor-pointer"
                         checked={isSelected}
                         onChange={() => {
                           if (isSelected) {
@@ -246,7 +246,7 @@ function AgendamentoForm({
                           }
                         }}
                       />
-                      <span className="text-sm text-slate-700 group-hover:text-nite-blue transition-colors leading-snug">
+                      <span className="text-sm text-slate-700 group-hover:text-blue-600 transition-colors leading-snug break-words">
                         {cont}
                       </span>
                     </label>
@@ -267,7 +267,7 @@ function AgendamentoForm({
           <input type="number" className={inputCls} value={form.quantidadePessoas} onChange={(e) => update('quantidadePessoas')(e.target.value)} placeholder="Ex: 25" min={1} max={getCapacidadeMaxima(form.espaco) || ''} />
         </Field>
         <div className="md:col-span-2">
-            <Field label="Observações (Aparece no Painel TV e Modais)">
+            <Field label="Observações (Opcional)">
               <textarea
                 className={`${inputCls} min-h-[80px] resize-y`}
                 value={form.observacoes || ''}
