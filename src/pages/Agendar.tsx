@@ -272,172 +272,109 @@ export default function Agendar() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:p-8">
           
-          {/* Bloco 1: Responsável e Telefone */}
+          {/* Bloco 1: Responsável */}
           <div className="mb-6">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Responsável</h2>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">RESPONSÁVEL</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Nome do Responsável" required>
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={form.nomeResponsavel}
-                  onChange={(e) => update('nomeResponsavel')(e.target.value)}
-                  placeholder="Nome completo"
-                />
+                <input type="text" className={inputCls} value={form.nomeResponsavel} onChange={(e) => update('nomeResponsavel')(e.target.value)} placeholder="Nome completo" />
               </Field>
-              <Field label="Telefone / WhatsApp">
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={form.telefoneResponsavel}
-                  onChange={(e) => update('telefoneResponsavel')(applyPhoneMask(e.target.value))}
-                  placeholder="(00) 00000-0000"
-                  maxLength={15}
-                />
+              <Field label="Telefone / Celular">
+                <input type="text" className={inputCls} value={form.telefoneResponsavel} onChange={(e) => update('telefoneResponsavel')(applyPhoneMask(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} />
               </Field>
             </div>
           </div>
 
-          {/* Bloco 2: Grupo / Turma / Disciplina / Conteúdo / Quantidade de Pessoas */}
+          {/* Bloco 2: Classe / Turma */}
           <div className="mb-6">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Grupo / Turma</h2>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">CLASSE / TURMA</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Curso" required>
-                <select className={selectCls} value={form.curso} onChange={(e) => {
-                  update('curso')(e.target.value);
-                  update('espaco')(''); // Limpa a sala ao trocar de curso
-                }}>
+                <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos(''); update('quantidadePessoas')(''); }}>
                   <option value="">Selecione o curso...</option>
-                  {params.cursos.map((c) => (
-                    c === '— Pós-Graduação —'
-                      ? <option key={c} value="" disabled>──── Pós-Graduação ────</option>
-                      : <option key={c} value={c}>{c}</option>
-                  ))}
+                  {params.cursos.map((c) => ( c === '— Pós-Graduação —' ? <option key={c} value="" disabled>──── Pós-Graduação ────</option> : <option key={c} value={c}>{c}</option> ))}
                 </select>
               </Field>
 
               <Field label="Disciplina" required>
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={form.disciplina}
-                  onChange={(e) => update('disciplina')(e.target.value)}
-                  placeholder="Nome da disciplina"
-                />
+                <input type="text" className={inputCls} value={form.disciplina} onChange={(e) => update('disciplina')(e.target.value)} placeholder="Nome da disciplina" />
               </Field>
 
-              {/* Campo de Conteúdos Múltiplos (Selecione até 5) */}
-          {['Medicina', 'Enfermagem', 'Fisioterapia'].includes(form.curso) && params.conteudos?.[form.curso] ? (
-            <Field label="Conteúdo da Aula (Selecione de 1 a 5)">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 max-h-52 overflow-y-auto p-3 border border-slate-300 rounded-xl bg-white focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
-                {params.conteudos[form.curso].map((cont: string) => {
-                  const selecionados = form.conteudo ? form.conteudo.split(' • ') : [];
-                  const isSelected = selecionados.includes(cont);
-
-                  return (
-                    <label key={cont} className="flex items-start gap-2 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 flex-shrink-0 w-4 h-4 accent-blue-600 cursor-pointer"
-                        checked={isSelected}
-                        onChange={() => {
-                          if (isSelected) {
-                            // Remove se já estiver selecionado
-                            update('conteudo')(selecionados.filter(c => c !== cont).join(' • '));
-                          } else {
-                            // Adiciona se estiver abaixo do limite de 5
-                            if (selecionados.length >= 5) {
-                              alert('Você pode selecionar no máximo 5 conteúdos.');
-                            } else {
-                              update('conteudo')([...selecionados, cont].join(' • '));
-                            }
-                          }
-                        }}
-                      />
-                      <span className="text-sm text-slate-700 group-hover:text-blue-600 transition-colors leading-snug break-words">
-                        {cont}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              
-              {/* Contador visual para o professor */}
-              <div className="mt-2 text-xs font-medium text-slate-500">
-                Selecionados: <span className={form.conteudo ? 'text-nite-blue font-bold' : ''}>
-                  {form.conteudo ? form.conteudo.split(' • ').length : 0}/5
-                </span>
-              </div>
-            </Field>
-          ) : (
-            <div className="hidden sm:block"></div>
-          )}
-            <Field label={`Quantidade de Pessoas ${getCapacidadeMaxima(form.espaco) ? `(Máx: ${getCapacidadeMaxima(form.espaco)})` : ''}`}>
-                <input
-                  type="number"
-                  min="1"
-                  max={getCapacidadeMaxima(form.espaco) || ''}
-                  className={inputCls}
-                  value={form.quantidadePessoas}
-                  onChange={(e) => update('quantidadePessoas')(e.target.value)}
-                  placeholder="Mínimo 1"/>
-            </Field>
+              {['Medicina', 'Enfermagem', 'Fisioterapia'].includes(form.curso) && params.conteudos?.[form.curso] ? (
+                <div className="sm:col-span-2">
+                  <Field label="Conteúdo da Aula (Selecione de 1 a 5)">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 max-h-52 overflow-y-auto p-3 border border-slate-300 rounded-xl bg-white focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
+                      {params.conteudos[form.curso].map((cont: string) => {
+                        const selecionados = form.conteudo ? form.conteudo.split(' • ') : [];
+                        const isSelected = selecionados.includes(cont);
+                        return (
+                          <label key={cont} className="flex items-start gap-2 cursor-pointer group">
+                            <input type="checkbox" className="mt-0.5 flex-shrink-0 w-4 h-4 accent-blue-600 cursor-pointer" checked={isSelected} onChange={() => { if (isSelected) { update('conteudo')(selecionados.filter(c => c !== cont).join(' • ')); } else { if (selecionados.length >= 5) { alert('Você pode selecionar no máximo 5 conteúdos.'); } else { update('conteudo')([...selecionados, cont].join(' • ')); } } }} />
+                            <span className="text-sm text-slate-700 group-hover:text-blue-600 transition-colors leading-snug break-words">{cont}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2 text-xs font-medium text-slate-500">
+                      Selecionados: <span className={form.conteudo ? 'text-nite-blue font-bold' : ''}>{form.conteudo ? form.conteudo.split(' • ').length : 0}/5</span>
+                    </div>
+                  </Field>
+                </div>
+              ) : (
+                <div className="hidden"></div>
+              )}
             </div>
           </div>
 
           {/* Bloco 3: Espaço e Tipo de Uso */}
           <div className="mb-6">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Espaço e Tipo de Uso</h2>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">ESPAÇO E TIPO DE USO</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Espaço" required>
-                <select 
-                  className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} 
-                  value={form.espaco} 
-                  disabled={!form.curso} // Bloqueia o clique se não tiver curso
-                  onChange={(e) => {
-                    update('espaco')(e.target.value);
-                    setRecursos(''); // Limpa o recurso se trocar de sala
-                  }}
-                >
-                  {/* Mensagem inteligente que muda dependendo se o curso foi escolhido */}
-                  <option value="">
-                    {!form.curso ? '⚠️ Selecione o curso acima primeiro...' : 'Selecione o espaço...'}
-                  </option>
-                  
+                <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos(''); }}>
+                  <option value="">{!form.curso ? '⚠️ Selecione o curso acima primeiro...' : 'Selecione o espaço...'}</option>
                   {espacosFiltrados.map((e) => <option key={e} value={e}>{e}</option>)}
                 </select>
               </Field>
+              
               <Field label="Tipo de Uso" required>
                 <select className={selectCls} value={form.tipoUso} onChange={(e) => update('tipoUso')(e.target.value)}>
                   <option value="">Selecione...</option>
                   {opcoesTipoUso.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </Field>
-              {mostrarRecursos && (
-                <div className="sm:col-span-2 mt-2">
-                  <Field label="Recursos audiovisuais a serem utilizados:">
-                    <select 
-                      className={selectCls} 
-                      value={recursos} 
-                      onChange={(e) => setRecursos(e.target.value)}
-                    >
-                      <option value="">Selecione o recurso...</option>
-                      <option value="Nenhum">Nenhum</option>
-                      <option value="Notebook">Notebook</option>
-                      <option value="Projetor">Projetor</option>
-                      
-                      {/* Só mostra essas duas opções se NÃO for o FABLAB */}
-                      {!isFablab && (
-                        <>
-                          <option value="Lousa Digital (TV interativa)">Lousa Digital (TV interativa)</option>
-                          <option value="Som (Microfone com Caixa)">Som (Microfone com Caixa)</option>
-                        </>
-                      )}
-                    </select>
-                  </Field>
-                </div>
-              )}
 
+              <Field label={`Quantidade de Pessoas ${getCapacidadeMaxima(form.espaco) ? `(Máx: ${getCapacidadeMaxima(form.espaco)})` : ''}`}>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max={getCapacidadeMaxima(form.espaco) || ''} 
+                  className={`${inputCls} ${!form.espaco ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} 
+                  value={form.quantidadePessoas} 
+                  disabled={!form.espaco} 
+                  onChange={(e) => update('quantidadePessoas')(e.target.value)} 
+                  placeholder={!form.espaco ? "⚠️ Selecione o espaço..." : "Mínimo 1"} 
+                />
+              </Field>
+
+              {mostrarRecursos ? (
+                <Field label="Recursos audiovisuais a serem utilizados:">
+                  <select className={selectCls} value={recursos} onChange={(e) => setRecursos(e.target.value)}>
+                    <option value="">Selecione o recurso...</option>
+                    <option value="Nenhum">Nenhum</option>
+                    <option value="Notebook">Notebook</option>
+                    <option value="Projetor">Projetor</option>
+                    {!isFablab && (
+                      <>
+                        <option value="Lousa Digital (TV interativa)">Lousa Digital (TV interativa)</option>
+                        <option value="Som (Microfone com Caixa)">Som (Microfone com Caixa)</option>
+                      </>
+                    )}
+                  </select>
+                </Field>
+              ) : (
+                <div className="hidden sm:block"></div>
+              )}
             </div>
           </div>
 

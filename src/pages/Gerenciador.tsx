@@ -11,7 +11,7 @@ import {
   DEFAULT_PARAMETROS,
   buscarParametros, buscarTodosAgendamentos, buscarSeguranca,
   atualizarAgendamento, excluirAgendamento, criarAgendamento,
-  verificarConflito, isoToBr, brToIso, applyDateMask, applyTimeMask, applyPhoneMask, todayIso,
+  verificarConflito, isoToBr, brToIso, applyDateMask, applyPhoneMask, todayIso,
 } from '../lib/firestore';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -99,15 +99,20 @@ interface AgForm {
   curso: string; disciplina: string; conteudo: string; quantidadePessoas: string; nomeResponsavel: string; telefoneResponsavel: string; observacoes: string;
 }
 
-function AgendamentoForm({
-  initial, params, onSave, onClose, excludeId, title, isSuperAdmin
-}: {
-  initial: AgForm; params: Parametros; onSave: (f: AgForm) => Promise<void>; onClose: () => void; excludeId?: string; title: string; isSuperAdmin: boolean;
-}) {
-  const [form, setForm] = useState<AgForm>(initial);
+function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, isSuperAdmin }: { initial: AgForm; params: Parametros; onSave: (f: AgForm) => Promise<void>; onClose: () => void; excludeId?: string; title: string; isSuperAdmin: boolean; }) {
+  
+  const [usoPuro, recursoExtra] = initial.tipoUso.split(' (Recurso: ');
+  const recursoInit = recursoExtra ? recursoExtra.replace(')', '') : '';
+  
+  const [form, setForm] = useState<AgForm>({ ...initial, tipoUso: usoPuro });
+  const [recursos, setRecursos] = useState(recursoInit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState<Agendamento | null>(null);
+
+  // CORREÇÃO: Variável declarada no topo do componente para o HTML conseguir enxergar!
+  const dataMax = new Date(); dataMax.setDate(dataMax.getDate() + 15);
+  const limiteIso = new Date(dataMax.getTime() - (dataMax.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
   const update = (field: keyof AgForm) => (value: string) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -119,35 +124,22 @@ function AgendamentoForm({
     if (!form.horaInicio || !form.horaFim) { setError('Informe os horários.'); return; }
     if (form.horaFim <= form.horaInicio) { setError('Hora fim deve ser posterior à hora início.'); return; }
 
-    // <-- INÍCIO DA NOVA TRAVA DE SEGURANÇA SÊNIOR -->
     const dataIso = brToIso(form.data);
-    const dataMax = new Date();
-    dataMax.setDate(dataMax.getDate() + 15);
-    const limiteIso = new Date(dataMax.getTime() - (dataMax.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-    
-    if (!isSuperAdmin && dataIso > limiteIso) {
-      setError('Você só pode agendar com no máximo 15 dias de antecedência.'); 
-      return;
-    }
+    if (!isSuperAdmin && dataIso > limiteIso) { setError('Você só pode agendar com no máximo 15 dias de antecedência.'); return; }
 
     const qtd = Number(form.quantidadePessoas);
-    if (!form.quantidadePessoas || qtd < 1) {
-      setError('A quantidade mínima é de 1 pessoa.');
-      return;
-    }
+    if (!form.quantidadePessoas || qtd < 1) { setError('A quantidade mínima é de 1 pessoa.'); return; }
     const maxCap = getCapacidadeMaxima(form.espaco);
-    if (maxCap && qtd > maxCap) {
-      setError(`A capacidade máxima é de ${maxCap} pessoas.`);
-      return;
-    }
-    // <-- FIM DA NOVA TRAVA DE SEGURANÇA SÊNIOR -->
+    if (maxCap && qtd > maxCap) { setError(`A capacidade máxima é de ${maxCap} pessoas.`); return; }
 
     setSaving(true);
     try {
       const isoDate = brToIso(form.data);
       const c = await verificarConflito(form.espaco, isoDate, form.horaInicio, form.horaFim, excludeId);
       if (c) { setConflict(c); setSaving(false); return; }
-      await onSave({ ...form, data: isoDate });
+      
+      const finalTipoUso = recursos && recursos !== 'Nenhum' ? `${form.tipoUso} (Recurso: ${recursos})` : form.tipoUso;
+      await onSave({ ...form, data: isoDate, tipoUso: finalTipoUso });
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Erro ao salvar.');
     } finally {
@@ -155,133 +147,137 @@ function AgendamentoForm({
     }
   };
 
+  const espacoLimpo = form.espaco.toLowerCase().replace(/\s+/g, '');
+  const mostrarRecursos = espacoLimpo.includes('class') || espacoLimpo.includes('fablab');
+  const isFablab = espacoLimpo.includes('fablab');
+
   return (
     <Modal title={title} onClose={onClose}>
-      <div className="flex flex-col gap-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Nome do Responsável" required>
-            <input type="text" className={inputCls} value={form.nomeResponsavel} onChange={(e) => update('nomeResponsavel')(e.target.value)} />
-          </Field>
-          <Field label="Telefone">
-            <input type="text" className={inputCls} value={form.telefoneResponsavel} onChange={(e) => update('telefoneResponsavel')(applyPhoneMask(e.target.value))} maxLength={15} />
-          </Field>
+      <div className="flex flex-col gap-6">
+        
+        {/* Bloco 1: RESPONSÁVEL */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">RESPONSÁVEL</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Nome do Responsável" required>
+              <input type="text" className={inputCls} value={form.nomeResponsavel} onChange={(e) => update('nomeResponsavel')(e.target.value)} placeholder="Nome completo" />
+            </Field>
+            <Field label="Telefone / Celular">
+              <input type="text" className={inputCls} value={form.telefoneResponsavel} onChange={(e) => update('telefoneResponsavel')(applyPhoneMask(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} />
+            </Field>
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Espaço" required>
-            <select className={selectCls} value={form.espaco} onChange={(e) => update('espaco')(e.target.value)}>
-              <option value="">Selecione...</option>
-              {params.espacos.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
-          </Field>
-          <Field label="Tipo de Uso" required>
-            <select className={selectCls} value={form.tipoUso} onChange={(e) => update('tipoUso')(e.target.value)}>
-              <option value="">Selecione...</option>
-              {params.tiposUso.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </Field>
+
+        {/* Bloco 2: CLASSE / TURMA */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">CLASSE / TURMA</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Curso" required>
+              <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos(''); update('quantidadePessoas')(''); }}>
+                <option value="">Selecione o curso...</option>
+                {params.cursos.map((c) => ( c === '— Pós-Graduação —' ? <option key={c} value="" disabled>──── Pós-Graduação ────</option> : <option key={c} value={c}>{c}</option> ))}
+              </select>
+            </Field>
+            <Field label="Disciplina" required>
+              <input type="text" className={inputCls} value={form.disciplina} onChange={(e) => update('disciplina')(e.target.value)} placeholder="Nome da disciplina" />
+            </Field>
+
+            {['Medicina', 'Enfermagem', 'Fisioterapia'].includes(form.curso) && params.conteudos?.[form.curso] ? (
+              <div className="sm:col-span-2">
+                <Field label="Conteúdo da Aula (Selecione de 1 a 5)">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 max-h-40 overflow-y-auto p-3 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
+                    {params.conteudos[form.curso].map((cont: string) => {
+                      const selecionados = form.conteudo ? form.conteudo.split(' • ') : [];
+                      const isSelected = selecionados.includes(cont);
+                      return (
+                        <label key={cont} className="flex items-start gap-2 cursor-pointer group">
+                          <input type="checkbox" className="mt-0.5 flex-shrink-0 w-4 h-4 accent-blue-600 cursor-pointer" checked={isSelected} onChange={() => { if (isSelected) { setForm({ ...form, conteudo: selecionados.filter(c => c !== cont).join(' • ') }); } else { if (selecionados.length >= 5) { alert('Você pode selecionar no máximo 5 conteúdos.'); } else { setForm({ ...form, conteudo: [...selecionados, cont].join(' • ') }); } } }} />
+                          <span className="text-sm text-slate-700 group-hover:text-blue-600 transition-colors leading-snug break-words">{cont}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 text-xs font-medium text-slate-500">
+                    Selecionados: <span className={form.conteudo ? 'text-nite-blue font-bold' : ''}>{form.conteudo ? form.conteudo.split(' • ').length : 0}/5</span>
+                  </div>
+                </Field>
+              </div>
+            ) : ( <div className="hidden"></div> )}
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Data (DD/MM/AAAA)" required>
+
+        {/* Bloco 3: ESPAÇO E TIPO DE USO */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">ESPAÇO E TIPO DE USO</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Espaço" required>
+              <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos(''); }}>
+                <option value="">{!form.curso ? '⚠️ Selecione o curso acima primeiro...' : 'Selecione o espaço...'}</option>
+                {params.espacos.map((e) => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </Field>
+            <Field label="Tipo de Uso" required>
+              <select className={selectCls} value={form.tipoUso} onChange={(e) => update('tipoUso')(e.target.value)}>
+                <option value="">Selecione...</option>
+                {params.tiposUso.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+
+            <Field label={`Quantidade de Pessoas ${getCapacidadeMaxima(form.espaco) ? `(Máx: ${getCapacidadeMaxima(form.espaco)})` : ''}`} required>
+              <input type="number" className={`${inputCls} ${!form.espaco ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.quantidadePessoas} disabled={!form.espaco} onChange={(e) => update('quantidadePessoas')(e.target.value)} placeholder={!form.espaco ? "⚠️ Selecione o espaço..." : "Mínimo 1"} min={1} max={getCapacidadeMaxima(form.espaco) || ''} />
+            </Field>
+
+            {mostrarRecursos ? (
+              <Field label="Recursos audiovisuais a serem utilizados:">
+                <select className={selectCls} value={recursos} onChange={(e) => setRecursos(e.target.value)}>
+                  <option value="">Selecione o recurso...</option>
+                  <option value="Nenhum">Nenhum</option>
+                  <option value="Notebook">Notebook</option>
+                  <option value="Projetor">Projetor</option>
+                  {!isFablab && (
+                    <>
+                      <option value="Lousa Digital (TV interativa)">Lousa Digital (TV interativa)</option>
+                      <option value="Som (Microfone com Caixa)">Som (Microfone com Caixa)</option>
+                    </>
+                  )}
+                </select>
+              </Field>
+            ) : ( <div className="hidden sm:block"></div> )}
+          </div>
+        </div>
+
+        {/* Bloco 4: DATA E HORÁRIO */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">DATA E HORÁRIO</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field label="Data:" required>
               <div className="relative">
-                <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.data)} max={isSuperAdmin ? undefined : applyDateMask(new Date(new Date().setDate(new Date().getDate() + 15)).toISOString().split('T')[0])} onChange={(e) => update('data')(isoToBr(e.target.value))} placeholder="DD/MM/AAAA" />
+                <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.data)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('data')(isoToBr(e.target.value))} />
               </div>
             </Field>
-            <Field label="Início (HH:MM)" required>
+            <Field label="Início:" required>
               <div className="relative">
-                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" className={`${inputCls} pl-10`} value={form.horaInicio} onChange={(e) => update('horaInicio')(applyTimeMask(e.target.value))} placeholder="00:00" />
+                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                <input type="time" className={`${inputCls} pl-10`} value={form.horaInicio} onChange={(e) => update('horaInicio')(e.target.value)} />
               </div>
             </Field>
-            <Field label="Fim (HH:MM)" required>
+            <Field label="Término:" required>
               <div className="relative">
-                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" className={`${inputCls} pl-10`} value={form.horaFim} onChange={(e) => update('horaFim')(applyTimeMask(e.target.value))} placeholder="00:00" />
+                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                <input type="time" className={`${inputCls} pl-10`} value={form.horaFim} onChange={(e) => update('horaFim')(e.target.value)} />
               </div>
             </Field>
           </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Curso" required>
-            <select className={selectCls} value={form.curso} onChange={(e) => update('curso')(e.target.value)}>
-              <option value="">Selecione...</option>
-              {params.cursos.map((c) => (
-                c === '— Pós-Graduação —'
-                  ? <option key={c} value="" disabled>──── Pós-Graduação ────</option>
-                  : <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Disciplina" required>
-            <input type="text" className={inputCls} value={form.disciplina} onChange={(e) => update('disciplina')(e.target.value)} placeholder="Nome da disciplina" />
-          </Field>
         </div>
 
-        {/* Campo de Conteúdos Múltiplos no Modal (Selecione até 5) */}
-          {['Medicina', 'Enfermagem', 'Fisioterapia'].includes(form.curso) && params.conteudos?.[form.curso] && params.conteudos[form.curso].length > 0 && (
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <label className="text-sm font-semibold text-slate-700">Conteúdos (Selecione de 1 a 5)</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 max-h-40 overflow-y-auto p-3 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
-                {params.conteudos[form.curso].map((cont: string) => {
-                  const selecionados = form.conteudo ? form.conteudo.split(' • ') : [];
-                  const isSelected = selecionados.includes(cont);
+        {/* Bloco 5: OBSERVAÇÕES */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">OBSERVAÇÕES (OPCIONAL)</h2>
+          <textarea className={`${inputCls} min-h-[80px] resize-y`} value={form.observacoes || ''} onChange={(e) => update('observacoes')(e.target.value)} placeholder="Ex: Lembrar de ligar o ar-condicionado, etc." />
+        </div>
 
-                  return (
-                    <label key={cont} className="flex items-start gap-2 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 flex-shrink-0 w-4 h-4 accent-blue-600 cursor-pointer"
-                        checked={isSelected}
-                        onChange={() => {
-                          if (isSelected) {
-                            // Desmarca o conteúdo
-                            setForm({ ...form, conteudo: selecionados.filter(c => c !== cont).join(' • ') });
-                          } else {
-                            // Marca o conteúdo limitando a 5
-                            if (selecionados.length >= 5) {
-                              alert('Você pode selecionar no máximo 5 conteúdos.');
-                            } else {
-                              setForm({ ...form, conteudo: [...selecionados, cont].join(' • ') });
-                            }
-                          }
-                        }}
-                      />
-                      <span className="text-sm text-slate-700 group-hover:text-blue-600 transition-colors leading-snug break-words">
-                        {cont}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              
-              {/* Contador visual */}
-              <div className="mt-1 text-xs font-medium text-slate-500">
-                Selecionados: <span className={form.conteudo ? 'text-nite-blue font-bold' : ''}>
-                  {form.conteudo ? form.conteudo.split(' • ').length : 0}/5
-                </span>
-              </div>
-            </div>
-          )}
-
-        <Field label={`Quantidade de Pessoas ${getCapacidadeMaxima(form.espaco) ? `(Máx: ${getCapacidadeMaxima(form.espaco)})` : ''}`} required>
-          <input type="number" className={inputCls} value={form.quantidadePessoas} onChange={(e) => update('quantidadePessoas')(e.target.value)} placeholder="Ex: 25" min={1} max={getCapacidadeMaxima(form.espaco) || ''} />
-        </Field>
-        <div className="md:col-span-2">
-            <Field label="Observações (Opcional)">
-              <textarea
-                className={`${inputCls} min-h-[80px] resize-y`}
-                value={form.observacoes || ''}
-                onChange={(e) => update('observacoes')(e.target.value)}
-                placeholder="Ex: Sala precisa de 10 cadeiras extras."
-              />
-            </Field>
-          </div>
-
-        {conflict && (
-          <div className="bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700">
-            <P.WarningCircle size={18} className="inline-block mr-1.5" /> Conflito: <strong>{conflict.espaco}</strong> já reservado {conflict.horaInicio}–{conflict.horaFim} por <strong>{conflict.nomeResponsavel}</strong>.
-          </div>
-        )}
+        {conflict && ( <div className="bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700"> <P.WarningCircle size={18} className="inline-block mr-1.5" /> Conflito: <strong>{conflict.espaco}</strong> já reservado {conflict.horaInicio}–{conflict.horaFim} por <strong>{conflict.nomeResponsavel}</strong>. </div> )}
         {error && <div className="bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700">{error}</div>}
 
         <div className="flex gap-3 pt-2">
@@ -304,34 +300,26 @@ function RecorrenteModal({ params, onClose, isSuperAdmin }: { params: Parametros
     quantidadePessoas: '', nomeResponsavel: '', telefoneResponsavel: '', observacoes: '',
     dataInicio: isoToBr(todayIso()), dataFim: '', diasSemana: [] as number[],
   });
+  const [recursos, setRecursos] = useState('');
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState('');
   const [error, setError] = useState('');
 
+  // CORREÇÃO: Variável declarada aqui no topo também!
+  const dataMax = new Date(); dataMax.setDate(dataMax.getDate() + 15);
+  const limiteIso = new Date(dataMax.getTime() - (dataMax.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
   const update = (field: string) => (value: string) => setForm((f) => ({ ...f, [field]: value }));
 
-  const toggleDay = (d: number) =>
-    setForm((f) => ({
-      ...f,
-      diasSemana: f.diasSemana.includes(d) ? f.diasSemana.filter((x) => x !== d) : [...f.diasSemana, d],
-    }));
+  const toggleDay = (d: number) => setForm((f) => ({ ...f, diasSemana: f.diasSemana.includes(d) ? f.diasSemana.filter((x) => x !== d) : [...f.diasSemana, d] }));
 
   const handleSave = async () => {
     setError(''); setResult('');
-    if (!form.nomeResponsavel.trim() || !form.espaco || !form.horaInicio || !form.horaFim || !form.dataInicio || !form.dataFim) {
-      setError('Preencha todos os campos obrigatórios.'); return;
-    }
+    if (!form.nomeResponsavel.trim() || !form.espaco || !form.horaInicio || !form.horaFim || !form.dataInicio || !form.dataFim) { setError('Preencha todos os campos obrigatórios.'); return; }
     if (form.diasSemana.length === 0) { setError('Selecione ao menos um dia da semana.'); return; }
 
     const endIso = brToIso(form.dataFim);
-    const dataMax = new Date();
-    dataMax.setDate(dataMax.getDate() + 15);
-    const limiteIso = new Date(dataMax.getTime() - (dataMax.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-    
-    if (!isSuperAdmin && endIso > limiteIso) {
-      setError('A Data Final ultrapassa o limite de 15 dias de antecedência.'); 
-      return;
-    }
+    if (!isSuperAdmin && endIso > limiteIso) { setError('A Data Final ultrapassa o limite de 15 dias de antecedência.'); return; }
 
     const qtd = Number(form.quantidadePessoas);
     if (!form.quantidadePessoas || qtd < 1) { setError('A quantidade mínima é de 1 pessoa.'); return; }
@@ -344,16 +332,19 @@ function RecorrenteModal({ params, onClose, isSuperAdmin }: { params: Parametros
       const end = new Date(brToIso(form.dataFim) + 'T12:00:00');
       let count = 0; let skipped = 0;
       const cur = new Date(start);
+      
+      const finalTipoUso = recursos && recursos !== 'Nenhum' ? `${form.tipoUso} (Recurso: ${recursos})` : form.tipoUso;
+
       while (cur <= end) {
         if (form.diasSemana.includes(cur.getDay())) {
           const isoDate = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
           const c = await verificarConflito(form.espaco, isoDate, form.horaInicio, form.horaFim);
           if (!c) {
             await criarAgendamento({
-              espaco: form.espaco, tipoUso: form.tipoUso, data: isoDate,
+              espaco: form.espaco, tipoUso: finalTipoUso, data: isoDate,
               horaInicio: form.horaInicio, horaFim: form.horaFim, curso: form.curso, 
               disciplina: form.disciplina.trim(), conteudo: form.conteudo || '', quantidadePessoas: form.quantidadePessoas,
-              nomeResponsavel: form.nomeResponsavel.trim(), telefoneResponsavel: form.telefoneResponsavel || '',
+              nomeResponsavel: form.nomeResponsavel.trim(), telefoneResponsavel: form.telefoneResponsavel || '', observacoes: form.observacoes || ''
             });
             count++;
           } else { skipped++; }
@@ -362,170 +353,172 @@ function RecorrenteModal({ params, onClose, isSuperAdmin }: { params: Parametros
       }
       setResult(`<P.CheckCircle size={18} className="inline-block mr-1.5" /> ${count} agendamento(s) criado(s). ${skipped > 0 ? `${skipped} ignorado(s) por conflito.` : ''}`);
     } catch (error) {
-      // Usamos 'error' aqui para coincidir com a definição acima
       setError(error instanceof Error ? error.message : 'Erro ao criar recorrências.');
     } finally {
       setSaving(false);
     }
   };
 
+  const espacoLimpo = form.espaco.toLowerCase().replace(/\s+/g, '');
+  const mostrarRecursos = espacoLimpo.includes('class') || espacoLimpo.includes('fablab');
+  const isFablab = espacoLimpo.includes('fablab');
+
   return (
-    <Modal 
-      title={<span className="flex items-center gap-2"><P.ArrowsClockwise size={20} /> Agendamento Recorrente</span>} 
-      onClose={onClose}>
-      
-      <div className="flex flex-col gap-5">
-        {result && (
-          <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-700 text-sm flex items-center gap-2 animate-in fade-in duration-300">
-            <P.CheckCircle size={20} weight="fill" />
-            {result}
-          </div>
-        )}
-        {/* Bloco 1: Responsável e Telefone */}
-        <div className="mb-2">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Responsável</h2>
+    <Modal title={<span className="flex items-center gap-2"><P.ArrowsClockwise size={20} /> Agendamento Recorrente</span>} onClose={onClose}>
+      <div className="flex flex-col gap-6">
+        
+        {result && ( <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-700 text-sm flex items-center gap-2 animate-in fade-in duration-300"> <P.CheckCircle size={20} weight="fill" /> <span dangerouslySetInnerHTML={{ __html: result }} /> </div> )}
+        
+        {/* Bloco 1: RESPONSÁVEL */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">RESPONSÁVEL</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Nome do Responsável" required>
-              <input type="text" className={inputCls} value={form.nomeResponsavel} onChange={(e) => update('nomeResponsavel')(e.target.value)} placeholder="Nome completo do professor"/>
+              <input type="text" className={inputCls} value={form.nomeResponsavel} onChange={(e) => update('nomeResponsavel')(e.target.value)} placeholder="Nome completo" />
             </Field>
-            <Field label="Telefone">
+            <Field label="Telefone / Celular">
               <input type="text" className={inputCls} value={form.telefoneResponsavel} onChange={(e) => update('telefoneResponsavel')(applyPhoneMask(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} />
             </Field>
           </div>
         </div>
 
-        {/* Bloco 2: Grupo / Turma / Disciplina / Conteúdo */}
-        <div className="mb-2">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 mt-4">Grupo / Turma</h2>
+        {/* Bloco 2: CLASSE / TURMA */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">CLASSE / TURMA</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Curso" required>
-              <select className={selectCls} value={form.curso} onChange={(e) => update('curso')(e.target.value)}>
-                <option value="">Selecione...</option>
+              <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos(''); update('quantidadePessoas')(''); }}>
+                <option value="">Selecione o curso...</option>
                 {params.cursos.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
             <Field label="Disciplina" required>
               <input type="text" className={inputCls} value={form.disciplina} onChange={(e) => update('disciplina')(e.target.value)} placeholder="Nome da disciplina" />
             </Field>
+
+            {['Medicina', 'Enfermagem', 'Fisioterapia'].includes(form.curso) && params.conteudos?.[form.curso] ? (
+              <div className="sm:col-span-2">
+                <Field label="Conteúdo da Aula (Selecione de 1 a 5)">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 max-h-40 overflow-y-auto p-3 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
+                    {params.conteudos[form.curso].map((cont: string) => {
+                      const selecionados = form.conteudo ? form.conteudo.split(' • ') : [];
+                      const isSelected = selecionados.includes(cont);
+                      return (
+                        <label key={cont} className="flex items-start gap-2 cursor-pointer group">
+                          <input type="checkbox" className="mt-0.5 flex-shrink-0 w-4 h-4 accent-blue-600 cursor-pointer" checked={isSelected} onChange={() => { if (isSelected) { setForm({ ...form, conteudo: selecionados.filter(c => c !== cont).join(' • ') }); } else { if (selecionados.length >= 5) { alert('Você pode selecionar no máximo 5 conteúdos.'); } else { setForm({ ...form, conteudo: [...selecionados, cont].join(' • ') }); } } }} />
+                          <span className="text-sm text-slate-700 group-hover:text-blue-600 transition-colors leading-snug break-words">{cont}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 text-xs font-medium text-slate-500">
+                    Selecionados: <span className={form.conteudo ? 'text-nite-blue font-bold' : ''}>{form.conteudo ? form.conteudo.split(' • ').length : 0}/5</span>
+                  </div>
+                </Field>
+              </div>
+            ) : ( <div className="hidden"></div> )}
           </div>
         </div>
 
-        {/* Campo de Conteúdos (Condicional) */}
-            {['Medicina', 'Enfermagem', 'Fisioterapia'].includes(form.curso) && (
-              <Field label="Conteúdo / Tema da Aula (Opcional)">
-                <select className={selectCls} value={form.conteudo} onChange={(e) => update('conteudo')(e.target.value)}>
-                  <option value="">Selecione o conteúdo...</option>
-                  {(params.conteudos?.[form.curso] || []).map((c: string, i: number) => (
-                    <option key={i} value={c}>{c}</option>
-                  ))}
-                </select>
-              </Field>
-            )}
-
-        {/* Bloco 3: Espaço e Tipo de Uso */}
-        <div className="mb-2">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 mt-4">Espaço e Tipo de Uso</h2>
+        {/* Bloco 3: ESPAÇO E TIPO DE USO */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">ESPAÇO E TIPO DE USO</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Espaço" required>
-              <select className={selectCls} value={form.espaco} onChange={(e) => update('espaco')(e.target.value)} disabled={!form.curso}>
-                <option value="">{form.curso ? "Selecione o espaço..." : "Selecione o curso primeiro"}</option>
+              <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos(''); }}>
+                <option value="">{!form.curso ? '⚠️ Selecione o curso acima primeiro...' : 'Selecione o espaço...'}</option>
                 {params.espacos.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
             </Field>
-            <Field label="Tipo de Uso">
+            <Field label="Tipo de Uso" required>
               <select className={selectCls} value={form.tipoUso} onChange={(e) => update('tipoUso')(e.target.value)}>
                 <option value="">Selecione...</option>
                 {params.tiposUso.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </Field>
+
+            <Field label={`Quantidade de Pessoas ${getCapacidadeMaxima(form.espaco) ? `(Máx: ${getCapacidadeMaxima(form.espaco)})` : ''}`} required>
+              <input type="number" className={`${inputCls} ${!form.espaco ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.quantidadePessoas} disabled={!form.espaco} onChange={(e) => update('quantidadePessoas')(e.target.value)} placeholder={!form.espaco ? "⚠️ Selecione o espaço..." : "Mínimo 1"} min={1} max={getCapacidadeMaxima(form.espaco) || ''} />
+            </Field>
+
+            {mostrarRecursos ? (
+              <Field label="Recursos audiovisuais a serem utilizados:">
+                <select className={selectCls} value={recursos} onChange={(e) => setRecursos(e.target.value)}>
+                  <option value="">Selecione o recurso...</option>
+                  <option value="Nenhum">Nenhum</option>
+                  <option value="Notebook">Notebook</option>
+                  <option value="Projetor">Projetor</option>
+                  {!isFablab && (
+                    <>
+                      <option value="Lousa Digital (TV interativa)">Lousa Digital (TV interativa)</option>
+                      <option value="Som (Microfone com Caixa)">Som (Microfone com Caixa)</option>
+                    </>
+                  )}
+                </select>
+              </Field>
+            ) : ( <div className="hidden sm:block"></div> )}
           </div>
         </div>
 
-        {/* Bloco 4: Datas / Horários / Quantidade de Pessoas */}
-        <div className="mb-2">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 mt-4">Datas e Horários</h2>
+        {/* Bloco 4: DATAS E HORÁRIOS */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">DATAS E HORÁRIOS</h2>
           
-          {/* Horários e Qtd */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <Field label="Hora Início" required>
-              <div className="relative">
-                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                <input type="time" className={`${inputCls} pl-10`} value={form.horaInicio} onChange={(e) => update('horaInicio')(e.target.value)} />
-              </div>
-            </Field>
-            <Field label="Hora Fim" required>
-              <div className="relative">
-                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                <input type="time" className={`${inputCls} pl-10`} value={form.horaFim} onChange={(e) => update('horaFim')(e.target.value)} />
-              </div>
-            </Field>
-            <Field label="Qtd. Pessoas">
-              <input type="number" className={inputCls} value={form.quantidadePessoas} onChange={(e) => update('quantidadePessoas')(e.target.value)} placeholder="Ex: 25" min={0} />
-            </Field>
-          </div>
-          
-          {/* Dias da Semana */}
           <div className="mb-4">
             <label className="text-sm font-semibold text-slate-700 block mb-2">Dias da Semana <span className="text-red-500">*</span></label>
             <div className="flex gap-2 flex-wrap">
               {DAYS.map((d, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => toggleDay(i)}
-                  className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${
-                    form.diasSemana.includes(i)
-                      ? 'bg-nite-blue text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {d}
-                </button>
+                <button key={i} type="button" onClick={() => toggleDay(i)} className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${ form.diasSemana.includes(i) ? 'bg-nite-blue text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200' }`}> {d} </button>
               ))}
             </div>
           </div>
 
-          {/* Período de Datas */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <Field label="Data Início" required>
               <div className="relative">
                 <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataInicio)} onChange={(e) => update('dataInicio')(isoToBr(e.target.value))} />
+                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataInicio)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('dataInicio')(isoToBr(e.target.value))} />
               </div>
             </Field>
             <Field label="Data Fim" required>
               <div className="relative">
                 <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataFim)} onChange={(e) => update('dataFim')(isoToBr(e.target.value))} />
+                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataFim)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('dataFim')(isoToBr(e.target.value))} />
+              </div>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Início:" required>
+              <div className="relative">
+                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                <input type="time" className={`${inputCls} pl-10`} value={form.horaInicio} onChange={(e) => update('horaInicio')(e.target.value)} />
+              </div>
+            </Field>
+            <Field label="Término:" required>
+              <div className="relative">
+                <P.Clock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                <input type="time" className={`${inputCls} pl-10`} value={form.horaFim} onChange={(e) => update('horaFim')(e.target.value)} />
               </div>
             </Field>
           </div>
         </div>
 
-        {/* Bloco 5: Observações */}
-        <div className="mb-4">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 mt-4">Observações (Para este lote)</h2>
-          <Field label="">
-            <textarea
-              className={`${inputCls} min-h-[80px] resize-y`}
-              value={form.observacoes}
-              onChange={(e) => update('observacoes')(e.target.value)}
-              placeholder="A mesma observação será aplicada a todas as datas."
-            />
-          </Field>
+        {/* Bloco 5: OBSERVAÇÕES */}
+        <div>
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">OBSERVAÇÕES (OPCIONAL)</h2>
+          <textarea className={`${inputCls} min-h-[80px] resize-y`} value={form.observacoes} onChange={(e) => update('observacoes')(e.target.value)} placeholder="Ex: Lembrar de ligar o ar-condicionado, etc. (Esta observação será replicada em todas as datas)" />
         </div>
 
         {error && <div className="bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700">{error}</div>}
 
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 border border-slate-300 text-slate-600 font-semibold py-3 rounded-xl hover:bg-slate-50 transition-colors">Fechar</button>
-          <button onClick={handleSave} disabled={saving} className="flex-1 bg-nite-blue text-white font-bold py-3 rounded-xl hover:bg-blue-900 disabled:opacity-60 transition-colors">
-            {saving ? 'Criando...' : (
-              <span className="flex items-center gap-2 justify-center">
-                <P.ArrowsClockwise size={20} /> Criar Recorrências</span>)}
+          <button onClick={handleSave} disabled={saving} className="flex-1 bg-nite-blue text-white font-bold py-3 rounded-xl hover:bg-blue-900 disabled:opacity-60 transition-colors shadow-md">
+            {saving ? 'Criando...' : ( <span className="flex items-center gap-2 justify-center"><P.ArrowsClockwise size={20} /> Criar Recorrências</span>)}
           </button>
         </div>
-        </div>
+      </div>
     </Modal>
   );
 }
