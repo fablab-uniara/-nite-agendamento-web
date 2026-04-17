@@ -1097,8 +1097,8 @@ export default function Gerenciador() {
                               <span className="flex items-center gap-1"><P.ChatText size={16} /> OBS</span>
                             </button>
                             
-                            {/* BOTÃO EDITAR: Aparece apenas para o Super Admin */}
-                            {isSuperAdmin && (
+                            {/* BOTÃO EDITAR: Super Admin OU o dono do próprio agendamento */}
+                            {(isSuperAdmin || ag.emailResponsavel === user?.email?.toLowerCase()) && (
                               <button onClick={() => setEditTarget(ag)} title="Editar" className="bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold px-2 py-1.5 rounded-lg transition-colors">
                                 <P.PencilSimpleLine size={16} />
                               </button>
