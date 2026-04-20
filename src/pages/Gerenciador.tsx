@@ -129,6 +129,12 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
     if (form.horaFim <= form.horaInicio) { setError('Hora fim deve ser posterior à hora início.'); return; }
 
     const dataIso = brToIso(form.data);
+
+    const isFeriado = params.feriados?.includes(dataIso);
+    if (isFeriado && !isSuperAdmin) { 
+      setError('A data selecionada é um feriado. O NITE estará fechado.'); 
+      return; 
+    }
     
     // Lógica de Bypass: Admin da Saúde em salas e cursos da Saúde não têm trava
     const ehCursoSaude = CURSOS_SAUDE.includes(form.curso);
@@ -267,6 +273,13 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
               <div className="relative">
                 <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
                 <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.data)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('data')(isoToBr(e.target.value))} />
+                {/* AVISO EXCLUSIVO PARA SUPER ADMIN */}
+                {isSuperAdmin && params.feriados?.includes(brToIso(form.data)) && (
+                  <span className="text-red-600 text-[11px] font-bold mt-1 flex items-center gap-1 leading-tight">
+                    <P.Warning size={14} weight="bold" /> 
+                    Atenção: Esta data é um Feriado na Uniara.
+                  </span>
+                )}
               </div>
             </Field>
             <Field label="Início:" required>
@@ -364,6 +377,12 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
         if (form.diasSemana.includes(cur.getDay())) {
           const isoDate = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
           const c = await verificarConflito(form.espaco, isoDate, form.horaInicio, form.horaFim);
+          // Se for feriado e NÃO for Super Admin, ignora este dia
+          if (params.feriados?.includes(isoDate) && !isSuperAdmin) {
+            skipped++;
+            cur.setDate(cur.getDate() + 1);
+            continue;
+          }
           if (!c) {
             await criarAgendamento({
               espaco: form.espaco, tipoUso: finalTipoUso, data: isoDate,
@@ -668,7 +687,85 @@ function GerenciarConteudosModal({ params, onClose, reload }: { params: Parametr
 
   const CURSOS_SAUDE = ['Medicina', 'Farmácia', 'Enfermagem', 'Psicologia', 'Fisioterapia', 'Educação Física'];
   const ESPACOS_SAUDE = ["Sala de Debriefing", "Sala UTI", "Sala Semi-Intensiva", "Sala 1 - Procedimentos", "Sala 2 - Habilidades", "Sala - Consultório"];
-// ─── Main component ───────────────────────────────────────────────────────────
+
+// ─── Modal de Gerenciar Feriados ──────────────────────────────────────────────
+function GerenciarFeriadosModal({ params, onClose, reload }: { params: Parametros, onClose: () => void, reload: () => void }) {
+  const [feriados, setFeriados] = useState<string[]>([...(params.feriados || [])]);
+  const [novaData, setNovaData] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = () => {
+    if (!novaData) return;
+    if (!feriados.includes(novaData)) {
+      setFeriados(prev => [...prev, novaData].sort());
+      setNovaData('');
+    }
+  };
+
+  const handleRemove = (dataParaRemover: string) => {
+    setFeriados(prev => prev.filter(d => d !== dataParaRemover));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, 'parametros', 'config'), { feriados }, { merge: true });
+      reload();
+      onClose();
+    } catch (err) {
+      console.error("Erro ao salvar feriados", err);
+      alert('Erro ao guardar os feriados.');
+    }
+    setSaving(false);
+  };
+
+  const inputCls = "w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-slate-700 font-medium focus:ring-2 focus:ring-red-500 outline-none transition-all";
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <P.CalendarX size={24} className="text-red-600" /> Feriados Uniara
+          </h2>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><P.X size={20} weight="bold" /></button>
+        </div>
+        
+        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
+          <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+            <label className="text-sm font-semibold text-red-900 block mb-2">Adicionar Data de Feriado</label>
+            <div className="flex gap-2">
+              <input type="date" className={inputCls} value={novaData} onChange={e => setNovaData(e.target.value)} />
+              <button onClick={handleAdd} className="bg-red-600 hover:bg-red-700 text-white px-4 rounded-xl font-bold transition-colors shadow-md">Adicionar</button>
+            </div>
+          </div>
+          
+          <div>
+            <label className="text-sm font-semibold text-slate-700 block mb-2">Feriados Cadastrados ({feriados.length})</label>
+            <div className="flex flex-col gap-2">
+              {feriados.map((d, i) => (
+                <div key={i} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <span className="font-semibold text-slate-700">{isoToBr(d)}</span>
+                  <button onClick={() => handleRemove(d)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Remover"><P.Trash size={18} weight="bold" /></button>
+                </div>
+              ))}
+              {feriados.length === 0 && <p className="text-slate-400 text-sm italic">Nenhum feriado cadastrado.</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 border border-slate-300 text-slate-600 font-semibold py-3 rounded-xl hover:bg-slate-50 transition-colors">Cancelar</button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 disabled:opacity-60 transition-colors shadow-md">
+            {saving ? 'A Guardar...' : 'Guardar Feriados'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+  // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Gerenciador() {
   const [user] = useAuthState(auth);
@@ -695,6 +792,7 @@ export default function Gerenciador() {
   const [obsTarget, setObsTarget] = useState<Agendamento | null>(null);
 
   const [showConteudosModal, setShowConteudosModal] = useState(false);
+  const [showFeriadosModal, setShowFeriadosModal] = useState(false);
 
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -965,6 +1063,16 @@ export default function Gerenciador() {
               </button>
             )}
 
+            {/* Botão de Gerenciar Feriados (Super Admin) */}
+            {adminRole === 'super' && (
+              <button 
+                onClick={() => setShowFeriadosModal(true)}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md"
+              >
+                <P.CalendarX size={20} /> Feriados
+              </button>
+            )}
+
             {/* Botão Temporário de Importar Conteúdos CSV */}
             {/*
             {adminRole === 'super' && (
@@ -1213,6 +1321,15 @@ export default function Gerenciador() {
         <GerenciarConteudosModal 
           params={filteredParams} 
           onClose={() => setShowConteudosModal(false)} 
+          reload={reload} 
+        />
+      )}
+
+      {/* Feriados modal */}
+      {showFeriadosModal && (
+        <GerenciarFeriadosModal 
+          params={filteredParams} 
+          onClose={() => setShowFeriadosModal(false)} 
           reload={reload} 
         />
       )}

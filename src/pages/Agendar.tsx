@@ -181,6 +181,11 @@ export default function Agendar() {
     const ehEspacoSaude = ESPACOS_SAUDE.includes(form.espaco);
     const bypassAdminSaude = isAdminSaude && ehCursoSaude && ehEspacoSaude;
 
+    const isFeriado = params.feriados?.includes(dataIso);
+    if (isFeriado && !isSuperAdmin) {
+      return 'A data selecionada é um feriado no calendário académico da Uniara. O NITE estará fechado.';
+    }
+
     if (!isSuperAdmin && !bypassAdminSaude && dataIso > limiteIso) {
       return 'Você só pode agendar horários com no máximo 15 dias de antecedência.';
     }
@@ -405,6 +410,13 @@ export default function Agendar() {
                     }
                   }}
                 />
+                {/* AVISO EXCLUSIVO PARA SUPER ADMIN */}
+                {isSuperAdmin && params.feriados?.includes(brToIso(form.data)) && (
+                  <span className="text-red-600 text-[11px] font-bold mt-1 flex items-center gap-1 leading-tight">
+                    <P.Warning size={14} weight="bold" /> 
+                    Atenção: Esta data é um Feriado na Uniara.
+                  </span>
+                )}
               </Field>
 
               <Field label="Início:" required>

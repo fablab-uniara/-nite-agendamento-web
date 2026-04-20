@@ -20,6 +20,7 @@ export interface Parametros {
   tiposUso: string[];
   espacos: string[];
   conteudos?: Record<string, string[]>;
+  feriados?: string[];
 }
 
 export interface Agendamento {
@@ -98,6 +99,7 @@ export const DEFAULT_PARAMETROS: Parametros = {
     'Fab Lab',
     'NITE',
   ],
+  feriados: [],
 };
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
