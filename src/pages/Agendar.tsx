@@ -153,6 +153,9 @@ export default function Agendar() {
   const espacoLimpo = form.espaco.toLowerCase().replace(/\s+/g, '');
   const mostrarRecursos = espacoLimpo.includes('class') || espacoLimpo.includes('fablab');
   const isFablab = espacoLimpo.includes('fablab');
+
+  // Lógica de Bypass em tempo real para o HTML ler
+  const bypassAdminSaude = isAdminSaude && CURSOS_SAUDE.includes(form.curso) && ESPACOS_SAUDE.includes(form.espaco);
   
   const validate = (): string | null => {
     // Validação de data e hora no passado
@@ -175,11 +178,6 @@ export default function Agendar() {
       const [h, m] = form.horaInicio.split(':').map(Number);
       if ((h * 60 + m) < currentMin) return 'O horário de início não pode estar no passado.';
     }
-    
-    // Lógica de Bypass para Admin da Saúde
-    const ehCursoSaude = CURSOS_SAUDE.includes(form.curso);
-    const ehEspacoSaude = ESPACOS_SAUDE.includes(form.espaco);
-    const bypassAdminSaude = isAdminSaude && ehCursoSaude && ehEspacoSaude;
 
     const isFeriado = params.feriados?.includes(dataIso);
     // Checagem de Domingo (0 = Domingo)
@@ -409,7 +407,7 @@ export default function Agendar() {
                   className={inputCls}
                   value={brToIso(form.data)}
                   min={hojeIso}
-                  max={isSuperAdmin ? undefined : limiteIso}
+                  max={(isSuperAdmin || bypassAdminSaude) ? undefined : limiteIso}
                   onChange={(e) => {
                     if (e.target.value) {
                       setForm({ ...form, data: isoToBr(e.target.value) });

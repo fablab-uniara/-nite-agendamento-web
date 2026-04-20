@@ -138,11 +138,6 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
       setError(isDomingo ? 'O NITE não abre aos domingos.' : 'A data selecionada é um feriado. O NITE estará fechado.'); 
       return; 
     }
-    
-    // Lógica de Bypass: Admin da Saúde em salas e cursos da Saúde não têm trava
-    const ehCursoSaude = CURSOS_SAUDE.includes(form.curso);
-    const ehEspacoSaude = ESPACOS_SAUDE.includes(form.espaco);
-    const bypassAdminSaude = isAdminSaude && ehCursoSaude && ehEspacoSaude;
 
     if (!isSuperAdmin && !bypassAdminSaude && dataIso > limiteIso) { 
       setError('Você só pode agendar com no máximo 15 dias de antecedência.'); 
@@ -172,6 +167,7 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
   const espacoLimpo = form.espaco.toLowerCase().replace(/\s+/g, '');
   const mostrarRecursos = espacoLimpo.includes('class') || espacoLimpo.includes('fablab');
   const isFablab = espacoLimpo.includes('fablab');
+  const bypassAdminSaude = isAdminSaude && CURSOS_SAUDE.includes(form.curso) && ESPACOS_SAUDE.includes(form.espaco);
 
   return (
     <Modal title={title} onClose={onClose}>
@@ -275,7 +271,7 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
             <Field label="Data:" required>
               <div className="relative">
                 <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.data)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('data')(isoToBr(e.target.value))} />
+                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.data)} max={(isSuperAdmin || bypassAdminSaude) ? undefined : limiteIso} onChange={(e) => update('data')(isoToBr(e.target.value))} />
                 {/* AVISO DE FERIADO OU DOMINGO (Visível para todos) */}
                 {(() => {
                   const dIso = brToIso(form.data);
@@ -420,6 +416,7 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
   const espacoLimpo = form.espaco.toLowerCase().replace(/\s+/g, '');
   const mostrarRecursos = espacoLimpo.includes('class') || espacoLimpo.includes('fablab');
   const isFablab = espacoLimpo.includes('fablab');
+  const bypassAdminSaude = isAdminSaude && CURSOS_SAUDE.includes(form.curso) && ESPACOS_SAUDE.includes(form.espaco);
 
   return (
     <Modal title={<span className="flex items-center gap-2"><P.ArrowsClockwise size={20} /> Agendamento Recorrente</span>} onClose={onClose}>
@@ -535,13 +532,13 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
             <Field label="Data Início" required>
               <div className="relative">
                 <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataInicio)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('dataInicio')(isoToBr(e.target.value))} />
+                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataInicio)} max={(isSuperAdmin || bypassAdminSaude) ? undefined : limiteIso} onChange={(e) => update('dataInicio')(isoToBr(e.target.value))} />
               </div>
             </Field>
             <Field label="Data Fim" required>
               <div className="relative">
                 <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataFim)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('dataFim')(isoToBr(e.target.value))} />
+                <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.dataFim)} max={(isSuperAdmin || bypassAdminSaude) ? undefined : limiteIso} onChange={(e) => update('dataFim')(isoToBr(e.target.value))} />
               </div>
             </Field>
           </div>
