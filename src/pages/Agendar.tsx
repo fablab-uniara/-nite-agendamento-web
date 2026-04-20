@@ -182,8 +182,14 @@ export default function Agendar() {
     const bypassAdminSaude = isAdminSaude && ehCursoSaude && ehEspacoSaude;
 
     const isFeriado = params.feriados?.includes(dataIso);
-    if (isFeriado && !isSuperAdmin) {
-      return 'A data selecionada é um feriado no calendário académico da Uniara. O NITE estará fechado.';
+    // Checagem de Domingo (0 = Domingo)
+    const dataObjeto = new Date(dataIso + 'T12:00:00'); 
+    const isDomingo = dataObjeto.getDay() === 0;
+
+    if ((isFeriado || isDomingo) && !isSuperAdmin) {
+      return isDomingo 
+        ? 'O NITE não abre aos domingos. Por favor, escolha um dia útil.' 
+        : 'A data selecionada é um feriado no calendário acadêmico da Uniara. O NITE estará fechado.';
     }
 
     if (!isSuperAdmin && !bypassAdminSaude && dataIso > limiteIso) {
@@ -395,7 +401,7 @@ export default function Agendar() {
 
           {/* Bloco 4: Data e Horário */}
           <div className="mb-8">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Data e Horário</h2>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">DATA E HORÁRIO</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Data:" required>
                 <input
@@ -410,13 +416,21 @@ export default function Agendar() {
                     }
                   }}
                 />
-                {/* AVISO EXCLUSIVO PARA SUPER ADMIN */}
-                {isSuperAdmin && params.feriados?.includes(brToIso(form.data)) && (
-                  <span className="text-red-600 text-[11px] font-bold mt-1 flex items-center gap-1 leading-tight">
-                    <P.Warning size={14} weight="bold" /> 
-                    Atenção: Esta data é um Feriado na Uniara.
-                  </span>
-                )}
+                {/* AVISO DE FERIADO OU DOMINGO (Visível para todos) */}
+                {(() => {
+                  const dIso = brToIso(form.data);
+                  const isF = params.feriados?.includes(dIso);
+                  const isD = new Date(dIso + 'T12:00:00').getDay() === 0;
+                  
+                  if (!isF && !isD) return null;
+
+                  return (
+                    <span className="text-red-600 text-[11px] font-bold mt-1 flex items-center gap-1 leading-tight">
+                      <P.Warning size={14} weight="bold" /> 
+                      Atenção: {isD ? 'O NITE não abre aos domingos.' : 'Esta data é um Feriado na Uniara.'}
+                    </span>
+                  );
+                })()}
               </Field>
 
               <Field label="Início:" required>
@@ -441,7 +455,7 @@ export default function Agendar() {
 
           {/* Bloco 5: Observações */}
           <div className="mb-8">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Observações (Opcional)</h2>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">OBSERVAÇÕES (OPCIONAL)</h2>
             <textarea
               className={`${inputCls} min-h-[100px] resize-y`}
               value={form.observacoes}

@@ -131,8 +131,11 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
     const dataIso = brToIso(form.data);
 
     const isFeriado = params.feriados?.includes(dataIso);
-    if (isFeriado && !isSuperAdmin) { 
-      setError('A data selecionada é um feriado. O NITE estará fechado.'); 
+    const dataObjeto = new Date(dataIso + 'T12:00:00');
+    const isDomingo = dataObjeto.getDay() === 0;
+
+    if ((isFeriado || isDomingo) && !isSuperAdmin) { 
+      setError(isDomingo ? 'O NITE não abre aos domingos.' : 'A data selecionada é um feriado. O NITE estará fechado.'); 
       return; 
     }
     
@@ -273,13 +276,21 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
               <div className="relative">
                 <P.CalendarBlank size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
                 <input type="date" className={`${inputCls} pl-10`} value={brToIso(form.data)} max={isSuperAdmin ? undefined : limiteIso} onChange={(e) => update('data')(isoToBr(e.target.value))} />
-                {/* AVISO EXCLUSIVO PARA SUPER ADMIN */}
-                {isSuperAdmin && params.feriados?.includes(brToIso(form.data)) && (
-                  <span className="text-red-600 text-[11px] font-bold mt-1 flex items-center gap-1 leading-tight">
-                    <P.Warning size={14} weight="bold" /> 
-                    Atenção: Esta data é um Feriado na Uniara.
-                  </span>
-                )}
+                {/* AVISO DE FERIADO OU DOMINGO (Visível para todos) */}
+                {(() => {
+                  const dIso = brToIso(form.data);
+                  const isF = params.feriados?.includes(dIso);
+                  const isD = new Date(dIso + 'T12:00:00').getDay() === 0;
+                  
+                  if (!isF && !isD) return null;
+
+                  return (
+                    <span className="text-red-600 text-[11px] font-bold mt-1 flex items-center gap-1 leading-tight">
+                      <P.Warning size={14} weight="bold" /> 
+                      Atenção: {isD ? 'O NITE não abre aos domingos.' : 'Esta data é um Feriado na Uniara.'}
+                    </span>
+                  );
+                })()}
               </div>
             </Field>
             <Field label="Início:" required>
@@ -377,8 +388,11 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
         if (form.diasSemana.includes(cur.getDay())) {
           const isoDate = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
           const c = await verificarConflito(form.espaco, isoDate, form.horaInicio, form.horaFim);
-          // Se for feriado e NÃO for Super Admin, ignora este dia
-          if (params.feriados?.includes(isoDate) && !isSuperAdmin) {
+          // Se for feriado OU domingo e NÃO for Super Admin, ignora este dia
+          const isDom = cur.getDay() === 0;
+          const isFer = params.feriados?.includes(isoDate);
+
+          if ((isFer || isDom) && !isSuperAdmin) {
             skipped++;
             cur.setDate(cur.getDate() + 1);
             continue;
