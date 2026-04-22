@@ -11,8 +11,8 @@ import {
   excluirAgendamento,
   isoToBr,
   brToIso,
-  applyDateMask,
   buscarSeguranca,
+  todayIso,
 } from '../lib/firestore';
 
 export default function MeusAgendamentos() {
@@ -154,12 +154,19 @@ export default function MeusAgendamentos() {
           </select>
           {/*  Filtro de Datas */}
           <input
-            type="text"
+            type="date"
             className="flex-1 border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-nite-blue/40"
-            placeholder="Filtrar por data DD/MM/AAAA"
-            value={filterDate}
-            onChange={(e) => setFilterDate(applyDateMask(e.target.value))}
-            maxLength={10}
+            value={filterDate ? brToIso(filterDate) : ''}
+            onChange={(e) => setFilterDate(e.target.value ? isoToBr(e.target.value) : '')}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                const baseIso = filterDate ? brToIso(filterDate) : todayIso();
+                const dt = new Date(baseIso + 'T12:00:00');
+                dt.setDate(dt.getDate() + (e.key === 'ArrowUp' ? 1 : -1));
+                setFilterDate(isoToBr(dt.toISOString().split('T')[0]));
+              }
+            }}
           />
           {/*  Filtro de Espaços */}
           <select

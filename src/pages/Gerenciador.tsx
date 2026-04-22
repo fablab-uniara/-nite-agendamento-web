@@ -11,7 +11,7 @@ import {
   DEFAULT_PARAMETROS,
   buscarParametros, buscarTodosAgendamentos, buscarSeguranca,
   atualizarAgendamento, excluirAgendamento, criarAgendamento,
-  verificarConflito, isoToBr, brToIso, applyDateMask, applyPhoneMask, todayIso,
+  verificarConflito, isoToBr, brToIso, applyPhoneMask, todayIso,
 } from '../lib/firestore';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1136,12 +1136,19 @@ export default function Gerenciador() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <input
-            type="text"
+            type="date"
             className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-nite-blue/40 w-full sm:w-40"
-            placeholder="Data DD/MM/AAAA"
-            value={filterDate}
-            onChange={(e) => setFilterDate(applyDateMask(e.target.value))}
-            maxLength={10}
+            value={filterDate ? brToIso(filterDate) : ''}
+            onChange={(e) => setFilterDate(e.target.value ? isoToBr(e.target.value) : '')}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault(); // Bloqueia o padrão para aplicarmos a nossa navegação global de dias
+                const baseIso = filterDate ? brToIso(filterDate) : todayIso();
+                const dt = new Date(baseIso + 'T12:00:00'); // T12 previne bugs de fuso horário
+                dt.setDate(dt.getDate() + (e.key === 'ArrowUp' ? 1 : -1));
+                setFilterDate(isoToBr(dt.toISOString().split('T')[0]));
+              }
+            }}
           />
           <select
             className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-nite-blue/40 w-full sm:w-56 cursor-pointer"
