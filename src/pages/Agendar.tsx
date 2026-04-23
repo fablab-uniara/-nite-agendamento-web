@@ -16,6 +16,8 @@ import {
   todayIso,
 } from '../lib/firestore';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const introJs: any;
 interface FormData {
   espaco: string;
   tipoUso: string;
@@ -206,6 +208,58 @@ export default function Agendar() {
     return null;
   };
 
+  const iniciarTourForm = () => {
+    // ts-ignore
+    introJs().setOptions({
+      nextLabel: 'Próximo',
+      prevLabel: 'Voltar',
+      doneLabel: 'Finalizar',
+      showStepNumbers: true,
+      showProgress: true,
+      steps: [
+        {
+          title: "👋 Bem-vindo(a)!",
+          intro: "Este guia ajudará você a realizar a sua reserva no NITE de forma correta."
+        },
+        {
+          element: document.querySelector('input[placeholder="Nome completo"]')?.closest('.mb-6'),
+          title: "Dados de Contato",
+          intro: "Confirme o seu nome e telefone institucional para que possamos entrar em contato caso haja alguma alteração."
+        },
+        {
+          element: document.querySelectorAll('select')[0]?.closest('.mb-6'), // Bloco do Curso
+          title: "Curso e Disciplina",
+          intro: "Selecione o curso e a disciplina. Importante: Dependendo do curso, o campo 'Conteúdo da Disciplina' aparecerá para preenchimento obrigatório.",
+          position: 'top'
+        },
+        {
+          element: document.querySelectorAll('select')[1]?.closest('.mb-6'), // Bloco do Espaço
+          title: "O Espaço e Uso",
+          intro: "Aqui você define a sala, o tipo de uso e a quantidade de pessoas. Nota: Se a sala possuir recursos audiovisuais extras, você poderá selecioná-los aqui.",
+          position: 'top'
+        },
+        {
+          element: document.querySelector('input[type="date"]')?.closest('.grid'),
+          title: "Data e Horários",
+          intro: "Selecione o dia e os horários de início e término. O sistema valida conflitos em tempo real.",
+          position: 'top'
+        },
+        {
+          element: document.querySelector('form'), // Foca no formulário geral para revisão
+          title: "Conferência",
+          intro: "Revise todos os campos preenchidos. Certifique-se de que as informações estão corretas antes de salvar.",
+          position: 'top'
+        },
+        {
+          element: document.querySelector('button[type="submit"]'),
+          title: "Finalizar Agendamento",
+          intro: "Tudo pronto! Clique aqui para enviar a sua reserva. Você receberá a confirmação na tela.",
+          position: 'top'
+        }
+      ]
+    }).start();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -288,6 +342,14 @@ export default function Agendar() {
           <h1 className="text-3xl font-black text-nite-blue">Agendar Espaço</h1>
           <p className="text-slate-500 mt-1">Preencha os campos abaixo para reservar um espaço do NITE.</p>
         </div>
+
+        {/* Botão Gatilho do Tutorial */}
+        <button 
+          onClick={iniciarTourForm}
+          className="text-nite-blue text-sm font-bold flex items-center gap-1.5 mb-6 hover:underline bg-blue-50 px-3 py-1.5 rounded-lg w-fit"
+        >
+          <P.Info size={18} /> Primeira vez aqui? Veja como preencher.
+        </button>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:p-8">
           

@@ -13,6 +13,10 @@ import {
   atualizarAgendamento, excluirAgendamento, criarAgendamento,
   verificarConflito, isoToBr, brToIso, applyPhoneMask, todayIso,
 } from '../lib/firestore';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const introJs: any;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function exportCSV(items: Agendamento[]) {
@@ -1011,6 +1015,45 @@ export default function Gerenciador() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  const iniciarTour = () => {
+    // ts-ignore
+    introJs().setOptions({
+      nextLabel: 'Próximo',
+      prevLabel: 'Voltar',
+      doneLabel: 'Entendi!',
+      showStepNumbers: true,
+      showProgress: true,
+      steps: [
+        {
+          title: "👋 Bem-vindo, Usuário!",
+          intro: "Este é o seu painel de gestão. Aqui você tem controle total sobre os agendamentos do NITE."
+        },
+        {
+          element: document.querySelector('.bg-nite-blue .flex-wrap'),
+          title: "Ações Rápidas",
+          intro: "Aqui você pode: criar um Novo Agendamento, configurar Recorrências, Exportar a lista em CSV ou Atualizar os dados da tabela manualmente.",
+          position: 'bottom'
+        },
+        {
+          element: document.querySelector('input[type="date"]')?.parentElement,
+          title: "Filtros e Busca",
+          intro: "Filtre por data, sala ou curso para encontrar rapidamente o que procura.",
+          position: 'bottom'
+        },
+        {
+          element: document.querySelector('table th:last-child, table td:last-child'), // Coluna de Ações
+          title: "Gestão de Registros",
+          intro: "Na coluna de Ações, use os botões para: 🔵 Editar dados, 🟠 Copiar agendamento para outra data ou 🔴 Excluir o registro definitivamente.",
+          position: 'left'
+        },
+        {
+          title: "Suporte e Dúvidas",
+          intro: "Tutorial concluído! Se precisar de suporte técnico ou houver erros, entre em contato via: niteprojetos@gmail.com",
+        }
+      ]
+    }).start();
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget?.id) return;
     setDeleting(true);
@@ -1097,6 +1140,14 @@ export default function Gerenciador() {
               </label>
             )}
             */}
+
+            {/* Botão de Tutorial (Aparece para Admins) */}
+            <button 
+              onClick={iniciarTour}
+              className="bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-md"
+            >
+              <P.Question size={20} weight="bold" /> Guia
+            </button>
             
             <button
               onClick={() => setShowRecorrente(true)}
