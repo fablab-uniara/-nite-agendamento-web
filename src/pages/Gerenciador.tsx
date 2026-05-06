@@ -22,7 +22,10 @@ declare const introJs: any;
 function exportCSV(items: Agendamento[]) {
   const header = ['Data', 'Início', 'Fim', 'Curso', 'Disciplina', 'Conteúdo', 'Espaço', 'Uso', 'Recursos', 'Responsável', 'Telefone', 'Qtd. Pessoas'];
   const rows = items.map((a) => {
-    const [usoPuro, recursoExtra] = a.tipoUso.split(' (Recurso: ');
+    const [usoPuro, recursoExtra] = a.tipoUso.includes(' (Recursos: ') 
+      ? a.tipoUso.split(' (Recursos: ') 
+      : a.tipoUso.split(' (Recurso: ');
+    
     const recursoFormatado = recursoExtra ? recursoExtra.replace(')', '') : 'Nenhum';
     
     return [
@@ -109,9 +112,13 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
   isSuperAdmin: boolean; isAdminSaude: boolean; 
 }) {
   
-  const [usoPuro, recursoExtra] = initial.tipoUso.split(' (Recurso: ');
-  const recursoInit = recursoExtra ? recursoExtra.replace(')', '') : '';
+  // Retrocompatibilidade: lida com "Recursos:" novo ou "Recurso:" antigo
+  const [usoPuro, recursoExtra] = initial.tipoUso.includes(' (Recursos: ') 
+    ? initial.tipoUso.split(' (Recursos: ') 
+    : initial.tipoUso.split(' (Recurso: ');
   
+  const recursoInit = recursoExtra ? recursoExtra.replace(')', '').split(', ').filter(r => r && r !== 'Nenhum') : [];
+
   const [form, setForm] = useState<AgForm>({ ...initial, tipoUso: usoPuro });
   const [recursos, setRecursos] = useState(recursoInit);
   const [saving, setSaving] = useState(false);
@@ -159,7 +166,7 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
       const c = await verificarConflito(form.espaco, isoDate, form.horaInicio, form.horaFim, excludeId);
       if (c) { setConflict(c); setSaving(false); return; }
       
-      const finalTipoUso = recursos && recursos !== 'Nenhum' ? `${form.tipoUso} (Recurso: ${recursos})` : form.tipoUso;
+      const finalTipoUso = recursos.length > 0 ? `${form.tipoUso} (Recursos: ${recursos.join(', ')})` : form.tipoUso;
       await onSave({ ...form, data: isoDate, tipoUso: finalTipoUso });
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Erro ao salvar.');
@@ -195,7 +202,7 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">CLASSE / TURMA</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Curso" required>
-              <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos(''); update('quantidadePessoas')(''); }}>
+              <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos([]); update('quantidadePessoas')(''); }}>
                 <option value="">Selecione o curso...</option>
                 {params.cursos.map((c) => ( c === '— Pós-Graduação —' ? <option key={c} value="" disabled>──── Pós-Graduação ────</option> : <option key={c} value={c}>{c}</option> ))}
               </select>
@@ -233,7 +240,7 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">ESPAÇO E TIPO DE USO</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Espaço" required>
-              <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos(''); }}>
+              <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos([]); }}>
                 <option value="">{!form.curso ? '⚠️ Selecione o curso acima primeiro...' : 'Selecione o espaço...'}</option>
                 {params.espacos.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
@@ -250,21 +257,35 @@ function AgendamentoForm({ initial, params, onSave, onClose, excludeId, title, i
             </Field>
 
             {mostrarRecursos ? (
-              <Field label="Recursos audiovisuais a serem utilizados:">
-                <select className={selectCls} value={recursos} onChange={(e) => setRecursos(e.target.value)}>
-                  <option value="">Selecione o recurso...</option>
-                  <option value="Nenhum">Nenhum</option>
-                  <option value="Notebook">Notebook</option>
-                  <option value="Projetor">Projetor</option>
-                  {!isFablab && (
-                    <>
-                      <option value="Lousa Digital (TV interativa)">Lousa Digital (TV interativa)</option>
-                      <option value="Som (Microfone com Caixa)">Som (Microfone com Caixa)</option>
-                    </>
-                  )}
-                </select>
-              </Field>
-            ) : ( <div className="hidden sm:block"></div> )}
+                <div className="sm:col-span-2 mt-2">
+                  <Field label="Recursos audiovisuais a serem utilizados (Opcional):">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-1 p-4 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
+                      {['Notebook', 'Projetor', ...(isFablab ? [] : ['Lousa Digital (TV interativa)', 'Som (Microfone com Caixa)'])].map((rec) => {
+                        const isSelected = recursos.includes(rec);
+                        return (
+                          <label key={rec} className="flex items-center gap-2 cursor-pointer group">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 accent-blue-600 cursor-pointer" 
+                              checked={isSelected} 
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setRecursos([...recursos, rec]);
+                                } else {
+                                  setRecursos(recursos.filter(r => r !== rec));
+                                }
+                              }} 
+                            />
+                            <span className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{rec}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                </div>
+              ) : (
+                <div className="hidden sm:block"></div>
+              )}
           </div>
         </div>
 
@@ -340,7 +361,7 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
     quantidadePessoas: '', nomeResponsavel: '', telefoneResponsavel: '', observacoes: '',
     dataInicio: isoToBr(todayIso()), dataFim: '', diasSemana: [] as number[],
   });
-  const [recursos, setRecursos] = useState('');
+  const [recursos, setRecursos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState('');
   const [error, setError] = useState('');
@@ -382,7 +403,7 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
       let count = 0; let skipped = 0;
       const cur = new Date(start);
       
-      const finalTipoUso = recursos && recursos !== 'Nenhum' ? `${form.tipoUso} (Recurso: ${recursos})` : form.tipoUso;
+      const finalTipoUso = recursos.length > 0 ? `${form.tipoUso} (Recursos: ${recursos.join(', ')})` : form.tipoUso;
 
       while (cur <= end) {
         if (form.diasSemana.includes(cur.getDay())) {
@@ -446,7 +467,7 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">CLASSE / TURMA</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Curso" required>
-              <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos(''); update('quantidadePessoas')(''); }}>
+              <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos([]); update('quantidadePessoas')(''); }}>
                 <option value="">Selecione o curso...</option>
                 {params.cursos.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -484,7 +505,7 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">ESPAÇO E TIPO DE USO</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Espaço" required>
-              <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos(''); }}>
+              <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos([]); }}>
                 <option value="">{!form.curso ? '⚠️ Selecione o curso acima primeiro...' : 'Selecione o espaço...'}</option>
                 {params.espacos.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
@@ -501,21 +522,35 @@ function RecorrenteModal({ params, onClose, isSuperAdmin, isAdminSaude }: {
             </Field>
 
             {mostrarRecursos ? (
-              <Field label="Recursos audiovisuais a serem utilizados:">
-                <select className={selectCls} value={recursos} onChange={(e) => setRecursos(e.target.value)}>
-                  <option value="">Selecione o recurso...</option>
-                  <option value="Nenhum">Nenhum</option>
-                  <option value="Notebook">Notebook</option>
-                  <option value="Projetor">Projetor</option>
-                  {!isFablab && (
-                    <>
-                      <option value="Lousa Digital (TV interativa)">Lousa Digital (TV interativa)</option>
-                      <option value="Som (Microfone com Caixa)">Som (Microfone com Caixa)</option>
-                    </>
-                  )}
-                </select>
-              </Field>
-            ) : ( <div className="hidden sm:block"></div> )}
+                <div className="sm:col-span-2 mt-2">
+                  <Field label="Recursos audiovisuais a serem utilizados (Opcional):">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-1 p-4 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
+                      {['Notebook', 'Projetor', ...(isFablab ? [] : ['Lousa Digital (TV interativa)', 'Som (Microfone com Caixa)'])].map((rec) => {
+                        const isSelected = recursos.includes(rec);
+                        return (
+                          <label key={rec} className="flex items-center gap-2 cursor-pointer group">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 accent-blue-600 cursor-pointer" 
+                              checked={isSelected} 
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setRecursos([...recursos, rec]);
+                                } else {
+                                  setRecursos(recursos.filter(r => r !== rec));
+                                }
+                              }} 
+                            />
+                            <span className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{rec}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                </div>
+              ) : (
+                <div className="hidden sm:block"></div>
+              )}
           </div>
         </div>
 
