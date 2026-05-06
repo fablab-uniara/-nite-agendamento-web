@@ -72,7 +72,7 @@ export default function Agendar() {
   const [user] = useAuthState(auth);
   const [params, setParams] = useState<Parametros>(DEFAULT_PARAMETROS);
   const [form, setForm] = useState<FormData>(EMPTY);
-  const [recursos, setRecursos] = useState('');
+  const [recursos, setRecursos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState<Agendamento | null>(null);
@@ -273,7 +273,7 @@ export default function Agendar() {
       if (conflito) { setConflict(conflito); setSaving(false); return; }
       await criarAgendamento({
         espaco: form.espaco,
-        tipoUso: recursos === 'Nenhum' || !recursos ? form.tipoUso : `${form.tipoUso} (Recurso: ${recursos})`,
+        tipoUso: recursos.length === 0 ? form.tipoUso : `${form.tipoUso} (Recursos: ${recursos.join(', ')})`,
         data: brToIso(form.data),
         horaInicio: form.horaInicio,
         horaFim: form.horaFim,
@@ -371,7 +371,7 @@ export default function Agendar() {
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">CLASSE / TURMA</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Curso" required>
-                <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos(''); update('quantidadePessoas')(''); }}>
+                <select className={selectCls} value={form.curso} onChange={(e) => { update('curso')(e.target.value); update('espaco')(''); setRecursos([]); update('quantidadePessoas')(''); }}>
                   <option value="">Selecione o curso...</option>
                   {params.cursos.map((c) => ( c === '— Pós-Graduação —' ? <option key={c} value="" disabled>──── Pós-Graduação ────</option> : <option key={c} value={c}>{c}</option> ))}
                 </select>
@@ -412,7 +412,7 @@ export default function Agendar() {
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">ESPAÇO E TIPO DE USO</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Espaço" required>
-                <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos(''); }}>
+                <select className={`${selectCls} ${!form.curso ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} value={form.espaco} disabled={!form.curso} onChange={(e) => { update('espaco')(e.target.value); setRecursos([]); }}>
                   <option value="">{!form.curso ? '⚠️ Selecione o curso acima primeiro...' : 'Selecione o espaço...'}</option>
                   {espacosFiltrados.map((e) => <option key={e} value={e}>{e}</option>)}
                 </select>
@@ -439,20 +439,32 @@ export default function Agendar() {
               </Field>
 
               {mostrarRecursos ? (
-                <Field label="Recursos audiovisuais a serem utilizados:">
-                  <select className={selectCls} value={recursos} onChange={(e) => setRecursos(e.target.value)}>
-                    <option value="">Selecione o recurso...</option>
-                    <option value="Nenhum">Nenhum</option>
-                    <option value="Notebook">Notebook</option>
-                    <option value="Projetor">Projetor</option>
-                    {!isFablab && (
-                      <>
-                        <option value="Lousa Digital (TV interativa)">Lousa Digital (TV interativa)</option>
-                        <option value="Som (Microfone com Caixa)">Som (Microfone com Caixa)</option>
-                      </>
-                    )}
-                  </select>
-                </Field>
+                <div className="sm:col-span-2 mt-2">
+                  <Field label="Recursos audiovisuais a serem utilizados (Opcional):">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-1 p-4 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
+                      {['Notebook', 'Projetor', ...(isFablab ? [] : ['Lousa Digital (TV interativa)', 'Som (Microfone com Caixa)'])].map((rec) => {
+                        const isSelected = recursos.includes(rec);
+                        return (
+                          <label key={rec} className="flex items-center gap-2 cursor-pointer group">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 accent-blue-600 cursor-pointer" 
+                              checked={isSelected} 
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setRecursos([...recursos, rec]);
+                                } else {
+                                  setRecursos(recursos.filter(r => r !== rec));
+                                }
+                              }} 
+                            />
+                            <span className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{rec}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                </div>
               ) : (
                 <div className="hidden sm:block"></div>
               )}
