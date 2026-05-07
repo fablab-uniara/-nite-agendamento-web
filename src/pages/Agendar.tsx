@@ -441,7 +441,7 @@ export default function Agendar() {
               {mostrarRecursos ? (
                 <div className="sm:col-span-2 mt-2">
                   <Field label="Recursos audiovisuais a serem utilizados (Opcional):">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-1 p-4 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 mt-2 p-3 border border-slate-300 rounded-xl bg-slate-50 focus-within:border-nite-blue focus-within:ring-1 focus-within:ring-nite-blue transition-all">
                       {['Notebook', 'Projetor', ...(isFablab ? [] : ['Lousa Digital (TV interativa)', 'Som (Microfone com Caixa)'])].map((rec) => {
                         const isSelected = recursos.includes(rec);
                         return (

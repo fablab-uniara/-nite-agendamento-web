@@ -36,46 +36,65 @@ function Clock() {
   );
 }
 
-// O AgCard agora recebe uma "variante" para saber se ele deve ser desenhado Gigante ou Pequeno
-function AgCard({ ag, variant }: { ag: Agendamento; variant: 'large' | 'small' }) {
+function AgCard({ ag, variant, scale = 'normal' }: { ag: Agendamento; variant: 'large' | 'small'; scale?: 'normal' | 'medium' | 'small' | 'tiny' }) {
   if (variant === 'large') {
-    // LAYOUT: ACONTECENDO AGORA (Grande e Destacado)
+    // Configurações dinâmicas de tamanho baseadas na escala
+    let titleSize = "text-3xl sm:text-4xl";
+    let subtitleSize = "text-xl sm:text-2xl";
+    let badgeSize = "text-sm px-4 py-2";
+    let timeSize = "text-2xl px-4 py-1.5";
+    let gapClass = "gap-2 mb-5";
+    let paddingClass = "p-5 sm:p-6";
+    let iconSize = 24;
+    let respSize = "text-lg";
+
+    if (scale === 'medium') {
+      titleSize = "text-2xl sm:text-3xl"; subtitleSize = "text-lg sm:text-xl";
+      badgeSize = "text-xs px-3 py-1.5"; timeSize = "text-xl px-3 py-1";
+      gapClass = "gap-2 mb-3"; paddingClass = "p-4 sm:p-5"; iconSize = 20; respSize = "text-base";
+    } else if (scale === 'small') {
+      titleSize = "text-xl sm:text-2xl"; subtitleSize = "text-sm sm:text-base";
+      badgeSize = "text-[10px] px-2 py-1"; timeSize = "text-lg px-2 py-1";
+      gapClass = "gap-1.5 mb-2"; paddingClass = "p-3 sm:p-4"; iconSize = 18; respSize = "text-sm";
+    } else if (scale === 'tiny') {
+      titleSize = "text-lg sm:text-xl"; subtitleSize = "text-xs sm:text-sm";
+      badgeSize = "text-[9px] px-2 py-1"; timeSize = "text-base px-2 py-1";
+      gapClass = "gap-1 mb-2"; paddingClass = "p-2 sm:p-3"; iconSize = 16; respSize = "text-xs";
+    }
+
+    // LAYOUT: ACONTECENDO AGORA (Responsivo ao Grid)
     return (
-      <div className="relative bg-slate-800 rounded-3xl shadow-2xl p-5 sm:p-6 overflow-hidden flex flex-col border-2 border-emerald-500/60 shadow-emerald-500/20 min-h-[320px]">
+      <div className={`relative bg-slate-800 rounded-3xl shadow-2xl ${paddingClass} overflow-hidden flex flex-col border-2 border-emerald-500/60 shadow-emerald-500/20 h-full`}>
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none"></div>
         
-        {/* Usamos flex-1 em vez de h-full para que ele se ajuste sem estourar o limite */}
-        <div className="relative z-10 flex flex-col flex-1">
-          
-          <div className="flex justify-between items-start mb-5 gap-2 flex-wrap">
-            <span className="bg-emerald-500 text-slate-900 px-4 py-2 rounded-xl text-sm font-black tracking-widest animate-pulse shadow-lg shadow-emerald-500/40">ACONTECENDO AGORA</span>
-            <div className="font-black text-slate-100 text-2xl tracking-tight bg-slate-900/60 px-4 py-1.5 rounded-xl border border-white/10 flex items-center gap-2">
-              <P.Clock size={24} className="text-emerald-400" /> {ag.horaInicio} – {ag.horaFim}
+        <div className="relative z-10 flex flex-col flex-1 h-full">
+          <div className={`flex justify-between items-start ${gapClass} flex-wrap`}>
+            <span className={`bg-emerald-500 text-slate-900 rounded-xl font-black tracking-widest animate-pulse shadow-lg shadow-emerald-500/40 ${badgeSize}`}>ACONTECENDO AGORA</span>
+            <div className={`font-black text-slate-100 tracking-tight bg-slate-900/60 rounded-xl border border-white/10 flex items-center gap-1.5 ${timeSize}`}>
+              <P.Clock size={iconSize} className="text-emerald-400" /> {ag.horaInicio} – {ag.horaFim}
             </div>
           </div>
           
-          <div className="mb-5 flex-grow">
-            {/* Fontes ligeiramente reduzidas para caber nomes longos sem quebrar o layout */}
-            <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-2 drop-shadow-md">{ag.curso}</h2>
-            <p className="text-xl sm:text-2xl text-emerald-300 font-bold drop-shadow-sm line-clamp-2">{ag.disciplina}</p>
+          <div className={`${gapClass} flex-grow overflow-hidden flex flex-col justify-center`}>
+            <h2 className={`${titleSize} font-black text-white leading-tight mb-1 drop-shadow-md line-clamp-2`}>{ag.curso}</h2>
+            <p className={`${subtitleSize} text-emerald-300 font-bold drop-shadow-sm line-clamp-2`}>{ag.disciplina}</p>
           </div>
           
-          <div className="flex flex-wrap gap-2 mb-5">
-            <span className="bg-white text-slate-900 px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-md">
-              <P.MapPin size={20} weight="fill" className="text-slate-700" /> {ag.espaco}
+          <div className={`flex flex-wrap ${gapClass}`}>
+            <span className={`bg-white text-slate-900 rounded-xl font-bold flex items-center gap-1.5 shadow-md ${badgeSize}`}>
+              <P.MapPin size={iconSize - 2} weight="fill" className="text-slate-700" /> {ag.espaco}
             </span>
             {ag.tipoUso && (
-              <span className="bg-slate-700 text-slate-100 px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-2 border border-slate-600 shadow-md">
-                <P.Tag size={20} weight="fill" className="text-slate-300" /> {ag.tipoUso}
+              <span className={`bg-slate-700 text-slate-100 rounded-xl font-bold flex items-center gap-1.5 border border-slate-600 shadow-md ${badgeSize}`}>
+                <P.Tag size={iconSize - 2} weight="fill" className="text-slate-300" /> {ag.tipoUso}
               </span>
             )}
           </div>
           
-          <div className="mt-auto pt-4 border-t border-slate-700/60 flex items-center gap-3 text-slate-300">
-            <P.User size={24} weight="bold" className="text-emerald-400" />
-            <span className="text-base">Responsável: <strong className="text-white font-bold text-lg">{ag.nomeResponsavel}</strong></span>
+          <div className={`mt-auto pt-2 border-t border-slate-700/60 flex items-center gap-2 text-slate-300`}>
+            <P.User size={iconSize} weight="bold" className="text-emerald-400" />
+            <span className={`text-xs sm:text-sm truncate`}>Resp: <strong className={`text-white font-bold ${respSize}`}>{ag.nomeResponsavel}</strong></span>
           </div>
-          
         </div>
       </div>
     );
@@ -152,6 +171,11 @@ export default function Painel() {
   }, [slideImages.length]);
   // --- FIM DA LÓGICA DO CARROSSEL ---
   
+  // --- INÍCIO DA LÓGICA DE PAGINAÇÃO DO "ACONTECENDO AGORA" ---
+  const HAPPENING_ITEMS_PER_PAGE = 10;
+  const [happeningPage, setHappeningPage] = useState(0);
+  const [isHappeningFading, setIsHappeningFading] = useState(false);
+
   // --- INÍCIO DA LÓGICA DE PAGINAÇÃO DO "EM BREVE" ---
   const [upcomingPage, setUpcomingPage] = useState(0);
   const [isUpcomingFading, setIsUpcomingFading] = useState(false);
@@ -169,6 +193,49 @@ export default function Painel() {
 
   const happeningSorted = [...happening].sort(sortByTime);
   const upcomingSorted = [...upcoming].sort(sortByTime);
+
+  useEffect(() => {
+    if (happeningSorted.length <= HAPPENING_ITEMS_PER_PAGE) return;
+
+    const interval = setInterval(() => {
+      setIsHappeningFading(true);
+      setTimeout(() => {
+        setHappeningPage((prev) => (prev + 1) % Math.ceil(happeningSorted.length / HAPPENING_ITEMS_PER_PAGE));
+        setIsHappeningFading(false);
+      }, 500);
+    }, 30000); // 30 segundos
+    return () => clearInterval(interval);
+  }, [happeningSorted.length]);
+
+  const maxHappeningPages = Math.ceil(happeningSorted.length / HAPPENING_ITEMS_PER_PAGE);
+  const safeHappeningPage = (happeningSorted.length <= HAPPENING_ITEMS_PER_PAGE || happeningPage >= maxHappeningPages) ? 0 : happeningPage;
+  
+  const visibleHappening = happeningSorted.slice(
+    safeHappeningPage * HAPPENING_ITEMS_PER_PAGE,
+    (safeHappeningPage + 1) * HAPPENING_ITEMS_PER_PAGE
+  );
+
+  const countHappening = visibleHappening.length;
+  let gridClass = "grid grid-cols-1 xl:grid-cols-2 gap-6 w-full h-full";
+  let cardScale: 'normal' | 'medium' | 'small' | 'tiny' = 'normal';
+
+  // Lógica Matemática do Grid: Quantos cabem?
+  if (countHappening === 1) {
+    gridClass = "flex-1 flex items-center justify-center w-full h-full";
+    cardScale = 'normal';
+  } else if (countHappening <= 4) {
+    gridClass = "grid grid-cols-2 grid-rows-2 gap-4 w-full h-full pb-2";
+    cardScale = 'normal';
+  } else if (countHappening <= 6) {
+    gridClass = "grid grid-cols-3 grid-rows-2 gap-4 w-full h-full pb-2";
+    cardScale = 'medium';
+  } else if (countHappening <= 8) {
+    gridClass = "grid grid-cols-4 grid-rows-2 gap-3 w-full h-full pb-2";
+    cardScale = 'small';
+  } else if (countHappening <= 10) {
+    gridClass = "grid grid-cols-5 grid-rows-2 gap-2 w-full h-full pb-2";
+    cardScale = 'tiny';
+  }
 
   useEffect(() => {
     // Se tiver 4 ou menos itens, não precisa paginar, apenas sai do efeito
@@ -281,25 +348,31 @@ export default function Painel() {
         )}
 
         {/* Coluna Esquerda: ACONTECENDO AGORA */}
-        <div className="flex-1 relative z-10 flex flex-col overflow-hidden">
+        <div className="flex-1 relative z-10 flex flex-col overflow-hidden pr-4">
           {happeningSorted.length > 0 ? (
-            <div className="overflow-y-auto pr-2 pb-10 flex-1 flex custom-scrollbar">
+            <div className={`flex-1 flex transition-opacity duration-500 ease-in-out ${isHappeningFading ? 'opacity-0' : 'opacity-100'}`}>
               
-              {/* Lógica de Centralização: Se tiver apenas 1 item, centraliza. Se não, usa o Grid. */}
-              {happeningSorted.length === 1 ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="w-full max-w-4xl">
-                    <AgCard key={happeningSorted[0].id} ag={happeningSorted[0]} variant="large" />
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full content-start">
-                  {happeningSorted.map((ag) => (
-                    <AgCard key={ag.id} ag={ag} variant="large" />
-                  ))}
+              {/* Indicador de Páginas (Aparece apenas se a fila passar de 10) */}
+              {happeningSorted.length > HAPPENING_ITEMS_PER_PAGE && (
+                <div className="absolute top-2 right-2 z-20 text-emerald-400/50 text-[10px] font-bold bg-emerald-900/40 px-2 py-1 rounded-md border border-emerald-500/20 shadow-lg">
+                  Página {happeningPage + 1} / {Math.ceil(happeningSorted.length / HAPPENING_ITEMS_PER_PAGE)}
                 </div>
               )}
 
+              {/* Renderização Dinâmica */}
+              {countHappening === 1 ? (
+                <div className={gridClass}>
+                  <div className="w-full max-w-4xl h-[70%]">
+                    <AgCard key={visibleHappening[0].id} ag={visibleHappening[0]} variant="large" scale={cardScale} />
+                  </div>
+                </div>
+              ) : (
+                <div className={gridClass}>
+                  {visibleHappening.map((ag) => (
+                    <AgCard key={ag.id} ag={ag} variant="large" scale={cardScale} />
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             !loading && slideImages.length > 0 && (
